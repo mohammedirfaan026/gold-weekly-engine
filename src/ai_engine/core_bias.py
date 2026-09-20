@@ -27,9 +27,12 @@ class MacroBiasEstimator:
         "dxy_return_1w",
         "delta_breakeven_1w",
         "gold_distance_20w",
+        "hy_oas_change_1w",
+        "vix_percentile",
     ]
 
-    def __init__(self):
+    def __init__(self, predictive_mode: bool = False):
+        self.predictive_mode = predictive_mode
         self.imputer = SimpleImputer(strategy="median")
         self.scaler = StandardScaler()
         self.model = BayesianRidge(max_iter=1000)
@@ -39,28 +42,29 @@ class MacroBiasEstimator:
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "MacroBiasEstimator":
         clean_idx = y.dropna().index
-        X_sub = X.loc[clean_idx, self.CORE_FEATURES].copy()
+        X_df = X.loc[clean_idx].copy()
+        for c in self.CORE_FEATURES:
+            if c not in X_df.columns:
+                X_df[c] = 0.0
+        X_sub = X_df[self.CORE_FEATURES].copy()
         y_sub = y.loc[clean_idx].values
 
         self.target_mean_ = float(np.mean(y_sub))
         self.target_std_ = float(np.std(y_sub)) if np.std(y_sub) > 1e-5 else 0.02
 
-        X_mat = self.imputer.fit_transform(X_sub)
+        X_mat = X_sub.fillna(0.0).values
         X_scaled = self.scaler.fit_transform(X_mat)
 
         self.model.fit(X_scaled, y_sub)
 
-        # Enforce economic monotonicity bounds on coefficients
-        # delta_real_yield_1w (index 0) <= 0
-        # dxy_return_1w (index 1) <= 0
-        # delta_breakeven_1w (index 2) >= 0
-        # gold_distance_20w (index 3) >= 0
-        coefs = self.model.coef_.copy()
-        coefs[0] = min(0.0, coefs[0])
-        coefs[1] = min(0.0, coefs[1])
-        coefs[2] = max(0.0, coefs[2])
-        coefs[3] = max(0.0, coefs[3])
-        self.model.coef_ = coefs
+        # Enforce economic monotonicity bounds on coefficients if not in predictive mode
+        if not self.predictive_mode:
+            coefs = self.model.coef_.copy()
+            coefs[0] = min(0.0, coefs[0])
+            coefs[1] = min(0.0, coefs[1])
+            coefs[2] = max(0.0, coefs[2])
+            coefs[3] = max(0.0, coefs[3])
+            self.model.coef_ = coefs
 
         return self
 
@@ -68,8 +72,12 @@ class MacroBiasEstimator:
         """
         Computes the weekly bias score in [-1.0, +1.0] and driver attribution for an observation.
         """
-        X_sub = X[self.CORE_FEATURES].copy()
-        X_mat = self.imputer.transform(X_sub)
+        X_df = X.copy()
+        for c in self.CORE_FEATURES:
+            if c not in X_df.columns:
+                X_df[c] = 0.0
+        X_sub = X_df[self.CORE_FEATURES].copy()
+        X_mat = X_sub.fillna(0.0).values
         X_scaled = self.scaler.transform(X_mat)
 
         expected_returns = self.model.predict(X_scaled)

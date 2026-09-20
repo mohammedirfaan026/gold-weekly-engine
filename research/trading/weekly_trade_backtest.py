@@ -26,8 +26,10 @@ from src.ai_engine.trade_executor import (
 
 
 TITLE = "Weekly Trade Execution & Profitability Backtest"
-FEATURES = ["delta_real_yield_1w", "dxy_return_1w", "delta_breakeven_1w",
-            "gold_distance_20w"]
+FEATURES = [
+    "delta_real_yield_1w", "dxy_return_1w", "delta_breakeven_1w",
+    "gold_distance_20w", "hy_oas_change_1w", "vix_percentile",
+]
 
 
 def _num(row: pd.Series, *names: str, default: float = 0.0) -> float:
@@ -46,6 +48,8 @@ def _features(row: pd.Series) -> Dict[str, float]:
         "dxy_return_1w": _num(row, "dxy_return_1w", "DXY_1w_return", "dxy_weekly_return"),
         "delta_breakeven_1w": _num(row, "delta_breakeven_1w"),
         "gold_distance_20w": _num(row, "gold_distance_20w"),
+        "hy_oas_change_1w": _num(row, "hy_oas_change_1w"),
+        "vix_percentile": _num(row, "vix_percentile"),
         "vix": _num(row, "vix", default=15.0),
     }
 
@@ -94,10 +98,17 @@ def _streak(values: Sequence[float], positive: bool) -> int:
 def _trade_metrics(returns: Sequence[float], signals: Sequence[int]) -> Dict[str, float]:
     result = _metrics(returns)
     s = np.asarray(signals, dtype=int)
+    r = np.asarray(returns, dtype=float)
+    active_mask = (s != 0) & np.isfinite(r)
+    active_returns = r[active_mask] if np.any(active_mask) else np.array([])
+    active_win_rate = float(np.mean(active_returns > 0)) if len(active_returns) > 0 else 0.0
     result.update({
         "long_trades": int(np.count_nonzero(s > 0)),
         "short_trades": int(np.count_nonzero(s < 0)),
         "flat_weeks": int(np.count_nonzero(s == 0)),
+        "trade_win_rate": active_win_rate,
+        "hit_rate": active_win_rate if int(np.count_nonzero(s != 0)) > 0 else result["hit_rate"],
+        "weekly_hit_rate": result["hit_rate"],
         "turnover": float(np.abs(np.diff(np.r_[0, s])).sum()),
         "longest_winning_streak": _streak(returns, True),
         "longest_losing_streak": _streak(returns, False),
@@ -143,10 +154,10 @@ class WeeklyTradeBacktest:
                 self.daily = None
 
     def run(self, period: Any = 52, execution: str = "friday_close",
-            threshold: float = .10, cost_bps: float = 0.0, slippage: float = 0.0,
-            sizing: str = "fixed", use_stops: bool = False,
-            ambiguous: str = "conservative", stop_pct: float = .01,
-            target_pct: float = .01, seed: int = 7) -> Dict[str, Any]:
+            threshold: float = .05, cost_bps: float = 0.0, slippage: float = 0.0,
+            sizing: str = "fixed", use_stops: bool = True,
+            ambiguous: str = "conservative", stop_pct: float = .025,
+            target_pct: float = .020, seed: int = 7) -> Dict[str, Any]:
         df = self.data.copy()
         if "next_week_gold_return" not in df:
             df["next_week_gold_return"] = df["close"].shift(-1) / df["close"] - 1
@@ -163,7 +174,7 @@ class WeeklyTradeBacktest:
         train = train.dropna(subset=["next_week_gold_return"])
         recursive = RecursiveSelfImprovingEngine()
         recursive.initialize(train)
-        static = MacroBiasEstimator().fit(train, train["next_week_gold_return"])
+        static = MacroBiasEstimator(predictive_mode=True).fit(train, train["next_week_gold_return"])
         records: List[Dict[str, Any]] = []
         for i in eval_idx:
             row = df.iloc[i]
@@ -467,9 +478,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(description=TITLE)
     p.add_argument("--period", default="52", choices=["52", "26", "13", "full"])
     p.add_argument("--execution", default="friday_close", choices=["friday_close", "monday_open"])
-    p.add_argument("--threshold", type=float, default=.10)
+    p.add_argument("--threshold", type=float, default=.05)
     p.add_argument("--cost-bps", type=float, default=0.0)
     p.add_argument("--slippage", type=float, default=0.0, help="round-trip decimal, e.g. .001")
+    p.add_argument("--no-stops", action="store_true", help="disable corridor stop/target execution")
+    p.add_argument("--stop-pct", type=float, default=.025)
+    p.add_argument("--target-pct", type=float, default=.020)
     p.add_argument("--all", action="store_true", help="run 52, 26, 13, and full")
     args = p.parse_args(argv)
     bt = WeeklyTradeBacktest()
@@ -477,7 +491,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     sensitivity = []
     for period in periods:
         result = bt.run(period=period, execution=args.execution, threshold=args.threshold,
-                        cost_bps=args.cost_bps, slippage=args.slippage)
+                        cost_bps=args.cost_bps, slippage=args.slippage,
+                        use_stops=not args.no_stops, stop_pct=args.stop_pct,
+                        target_pct=args.target_pct)
         paths = bt.write_outputs(result, f"weekly_trade_backtest_{period}")
         sensitivity.append({"period": period, "threshold": args.threshold,
                             "cost_bps": args.cost_bps, "slippage": args.slippage,
@@ -485,11 +501,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"{period}: {result['metrics']} -> {paths['report']}")
     if args.all or args.period == "52":
         grid = []
-        for th in (.05, .10, .15, .20):
+        for th in (.03, .05, .08, .10):
             for cb in (0.0, 10.0, 20.0):
                 for slip in (0.0, .0005, .001, .002):
                     x = bt.run(period=52, execution=args.execution, threshold=th,
-                               cost_bps=cb, slippage=slip)
+                               cost_bps=cb, slippage=slip,
+                               use_stops=not args.no_stops, stop_pct=args.stop_pct,
+                               target_pct=args.target_pct)
                     grid.append({"period": 52, "threshold": th, "cost_bps": cb,
                                  "slippage": slip, **x["metrics"]})
         out = Path("research/validation")

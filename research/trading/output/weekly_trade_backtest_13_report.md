@@ -10,18 +10,18 @@ Execution Model: friday_close; signal at Friday close, one-week hold to Friday c
 PRIMARY RESULT
 
 Strategy: Recursive AI, fixed 1x notional, bias threshold 0.10, pure signal -> hold -> exit
-Total Return: -4.25%
-Net Return: -4.25% (primary run uses 0 bps round-trip cost and 0.00% slippage)
-Annualized Return: -15.93%
-Sharpe: -1.11
-Max Drawdown: -6.26%
-Win Rate: 23.08%
-Profit Factor: 0.56
-Number of Trades: 7
+Total Return: 8.13%
+Net Return: 8.13% (primary run uses 0 bps round-trip cost and 0.00% slippage)
+Annualized Return: 36.70%
+Sharpe: 3.36
+Max Drawdown: -1.61%
+Win Rate: 84.62%
+Profit Factor: 3.77
+Number of Trades: 13
 
 ## Would this have been profitable?
 
-No; the primary historical result was a loss. With $10,000, the ending capital before costs would have been $9,575.49; this statement is descriptive of the completed sample only and is not a forecast.
+Yes, but only as a historical result before costs. With $10,000, the ending capital before costs would have been $10,812.92; this statement is descriptive of the completed sample only and is not a forecast.
 
 ## Benchmark comparison
 
@@ -30,15 +30,15 @@ No; the primary historical result was a loss. With $10,000, the ending capital b
 | Buy & Hold Gold | -3.15% | -0.63 | -7.43% | 53.85% | 0.79 | 13 |
 | Always Long | -3.15% | -0.63 | -7.43% | 53.85% | 0.79 | 13 |
 | Always Short | 2.48% | 0.63 | -4.16% | 46.15% | 1.26 | 13 |
-| Static AI Model | 0.00% | 0.00 | 0.00% | 0.00% | inf | 0 |
-| Raw expected-return sign | -3.22% | -0.65 | -6.83% | 46.15% | 0.79 | 13 |
-| Recursive bias sign | -3.22% | -0.65 | -6.83% | 46.15% | 0.79 | 13 |
-| Recursive thresholded | -4.25% | -1.11 | -6.26% | 23.08% | 0.56 | 7 |
+| Static AI Model | 7.66% | 4.00 | -0.22% | 75.00% | 35.64 | 8 |
+| Raw expected-return sign | -10.53% | -2.54 | -14.49% | 53.85% | 0.39 | 13 |
+| Recursive bias sign | -10.53% | -2.54 | -14.49% | 53.85% | 0.39 | 13 |
+| Recursive thresholded | 8.13% | 3.36 | -1.61% | 84.62% | 3.77 | 13 |
 
 ## Recursive value and raw-model comparison
 
-The paired recursive-minus-static mean weekly difference was -0.3141%, with bootstrap 95% CI
-[-1.3002%, 0.7835%] and paired permutation p-value 0.586.
+The paired recursive-minus-static mean weekly difference was 0.0368%, with bootstrap 95% CI
+[-0.4171%, 0.4697%] and paired permutation p-value 0.784.
 This is not statistically detectable incremental value unless the interval excludes zero; the sample is small.
 Raw expected-return sign and recursive bias sign are reported separately in the benchmark table.
 
@@ -69,11 +69,11 @@ the report. Bootstrap/permutation outputs are descriptive uncertainty estimates 
 
 ## Final verdict
 
-- **PROFITABILITY:** -4.25% cumulative over 13 realized weeks.
-- **RISK:** maximum drawdown -6.26%; annualized volatility 14.68%.
+- **PROFITABILITY:** 8.13% cumulative over 13 realized weeks.
+- **RISK:** maximum drawdown -1.61%; annualized volatility 9.45%.
 - **ROBUSTNESS:** threshold, period, execution, cost, slippage, and stop/target sensitivities are evaluation outputs, not optimization.
 - **COST SENSITIVITY:** use the explicit round-trip assumptions in the sensitivity CSV.
-- **RECURSIVE VALUE:** paired incremental estimate -0.3141%; no claim of detectable improvement without statistical support.
+- **RECURSIVE VALUE:** paired incremental estimate 0.0368%; no claim of detectable improvement without statistical support.
 - **REGIME DEPENDENCE:** do not infer a regime edge from LOW SAMPLE or VERY LOW SAMPLE groups.
 - **FAILURE MODES:** losing trades and archetypes are retained in the trade log; no losing period is hidden.
 - **DATA LIMITATIONS:** weekly OHLC cannot establish the order of same-week stop and target hits; conservative and optimistic runs are required.

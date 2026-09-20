@@ -226,18 +226,24 @@ class FailureMemoryBank:
                 "bias_tilt": 0.0,
             }
 
-        curr_vec = np.array([current_features.get(k, 0.0) for k in self.FEATURE_KEYS], dtype=float)
-        norm_curr = np.linalg.norm(curr_vec)
+        vec_scales = np.array([0.05, 0.01, 0.04, 5.0])
+        vec_means = np.array([0.0, 0.0, 0.0, 18.0])
+        curr_raw = np.array([current_features.get(k, 0.0) for k in self.FEATURE_KEYS], dtype=float)
+        curr_z = (curr_raw - vec_means) / vec_scales
+        norm_curr = np.linalg.norm(curr_z)
         if norm_curr > 1e-6:
-            curr_unit = curr_vec / norm_curr
+            curr_unit = curr_z / norm_curr
         else:
-            curr_unit = curr_vec
+            curr_unit = curr_z
 
         best_sim = -1.0
         best_rec = None
 
         for rec in self.memory:
-            sim = float(np.dot(curr_unit, rec["vector_unit"]))
+            rec_z = (rec["vector"] - vec_means) / vec_scales
+            norm_rec = np.linalg.norm(rec_z)
+            rec_unit = rec_z / norm_rec if norm_rec > 1e-6 else rec_z
+            sim = float(np.dot(curr_unit, rec_unit))
             if sim > best_sim:
                 best_sim = sim
                 best_rec = rec
@@ -249,16 +255,16 @@ class FailureMemoryBank:
             # Apply reflexive adjustments depending on failure type
             if arch == FailureArchetype.COUNTER_TREND_EXHAUSTION:
                 # Tilt against extension
-                bias_tilt = -0.05 if best_rec["actual_ret"] < 0 else +0.05
-                conf_mult = 0.70
+                bias_tilt = -0.03 if best_rec["actual_ret"] < 0 else +0.03
+                conf_mult = 0.80
                 corridor_factor = 1.25
             elif arch == FailureArchetype.VOLATILITY_LIQUIDATION:
                 bias_tilt = 0.0
-                conf_mult = 0.50
-                corridor_factor = 1.40
+                conf_mult = 0.60
+                corridor_factor = 1.35
             elif arch == FailureArchetype.MACRO_DECOUPLING:
-                bias_tilt = +0.03
-                conf_mult = 0.80
+                bias_tilt = +0.02
+                conf_mult = 0.90
                 corridor_factor = 1.15
             else:
                 bias_tilt = 0.0
@@ -267,7 +273,7 @@ class FailureMemoryBank:
 
             return {
                 "max_similarity": round(best_sim_clamped, 3),
-                "matching_archetype": best_rec["archetype_str"],
+                "matching_archetype": arch.value,
                 "most_similar_week": best_rec["week"],
                 "reflexive_warning": True,
                 "confidence_multiplier": conf_mult,
@@ -276,9 +282,9 @@ class FailureMemoryBank:
             }
 
         return {
-            "max_similarity": round(best_sim_clamped, 3),
-            "matching_archetype": best_rec["archetype_str"] if best_rec else "NONE",
-            "most_similar_week": best_rec["week"] if best_rec else "NONE",
+            "max_similarity": round(best_sim_clamped, 3) if best_sim > 0 else 0.0,
+            "matching_archetype": "NONE",
+            "most_similar_week": "NONE",
             "reflexive_warning": False,
             "confidence_multiplier": 1.0,
             "corridor_widening_factor": 1.0,
@@ -297,12 +303,14 @@ class RecursiveKalmanEstimator:
         "dxy_return_1w",
         "delta_breakeven_1w",
         "gold_distance_20w",
+        "hy_oas_change_1w",
+        "vix_percentile",
     ]
 
     def __init__(self, initial_q: float = 1e-4, baseline_r: float = 4e-4):
-        self.k = len(self.FEATURE_COLS) + 1  # 4 features + 1 intercept
-        # Initial weights: intercept ~ +0.002, yield ~ -0.01, dxy ~ -0.03, breakeven ~ +0.01, trend ~ +0.02
-        self.w = np.array([0.002, 0.0, -0.03, 0.01, 0.02], dtype=float)
+        self.k = len(self.FEATURE_COLS) + 1  # features + intercept
+        self.w = np.zeros(self.k, dtype=float)
+        self.w[0] = 0.002
         self.P = np.eye(self.k) * 0.01
         self.Q = np.eye(self.k) * initial_q
         self.R0 = baseline_r
@@ -314,7 +322,11 @@ class RecursiveKalmanEstimator:
     def warm_start(self, train_df: pd.DataFrame, target_series: pd.Series):
         """Initializes weights on historical training sample."""
         clean_idx = target_series.dropna().index
-        sub_X = train_df.loc[clean_idx, self.FEATURE_COLS].fillna(0.0).values
+        df_copy = train_df.loc[clean_idx].copy()
+        for c in self.FEATURE_COLS:
+            if c not in df_copy.columns:
+                df_copy[c] = 0.0
+        sub_X = df_copy[self.FEATURE_COLS].fillna(0.0).values
         sub_y = target_series.loc[clean_idx].values
 
         self.feature_means = np.mean(sub_X, axis=0)
@@ -368,7 +380,7 @@ class RecursiveKalmanEstimator:
         # Attribution-gated measurement noise R_t
         arch = attribution.get("archetype", FailureArchetype.IN_LINE)
         if arch == FailureArchetype.VOLATILITY_LIQUIDATION:
-            # External shock: inflate noise to freeze/dampen weight adaptation
+            # Transient panic: inflate measurement noise by 8x to freeze weights
             R_t = self.R0 * 8.0
         elif arch == FailureArchetype.MACRO_DECOUPLING:
             # Structural regime shift: deflate noise to accelerate learning
@@ -389,16 +401,7 @@ class RecursiveKalmanEstimator:
         self.P = np.dot(np.eye(self.k) - np.outer(K, x), P_prior)
 
         # Soft stabilization bounds to prevent divergence
-        # w[0] = intercept
         self.w[0] = np.clip(self.w[0], -0.01, 0.01)
-        # w[1] = delta_real_yield_1w (allow mild empirical reversal slope up to +0.035, clamp extreme negative)
-        self.w[1] = np.clip(self.w[1], -0.05, 0.04)
-        # w[2] = dxy_return_1w (penalize positive USD exposure beyond +0.02)
-        self.w[2] = np.clip(self.w[2], -0.06, 0.02)
-        # w[3] = delta_breakeven_1w
-        self.w[3] = np.clip(self.w[3], -0.02, 0.04)
-        # w[4] = gold_distance_20w
-        self.w[4] = np.clip(self.w[4], -0.01, 0.05)
 
         self.history_updates += 1
 
@@ -475,10 +478,10 @@ class RecursiveSelfImprovingEngine:
             "primary_cause": attribution["primary_cause"],
             "updated_weights": {
                 "intercept": round(float(self.kalman_model.w[0]), 4),
-                "beta_real_yield": round(float(self.kalman_model.w[1]), 4),
-                "beta_dxy": round(float(self.kalman_model.w[2]), 4),
-                "beta_breakeven": round(float(self.kalman_model.w[3]), 4),
-                "beta_trend_20w": round(float(self.kalman_model.w[4]), 4),
+                **{
+                    f"beta_{col}": round(float(self.kalman_model.w[idx + 1]), 4)
+                    for idx, col in enumerate(self.kalman_model.FEATURE_COLS)
+                },
             },
         }
 
