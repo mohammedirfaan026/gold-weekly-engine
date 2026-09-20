@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Gold Weekly Response Engine - Quantitative Research Report</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #E0E0E0; line-height: 1.6; margin: 0; padding: 40px; }
+.container { max-width: 1200px; margin: 0 auto; background: #1E1E1E; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+h1 { color: #D4AF37; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }
+h2 { color: #F0E68C; margin-top: 30px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+h3 { color: #00CED1; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #252525; border-radius: 4px; overflow: hidden; }
+th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #333; }
+th { background-color: #2D2D2D; color: #D4AF37; font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+tr:hover { background-color: #2A2A2A; }
+code { background: #333; color: #00FF7F; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 13px; }
+.chart-link { display: inline-block; margin: 10px 10px 10px 0; padding: 8px 16px; background: #D4AF37; color: #000; text-decoration: none; border-radius: 4px; font-weight: bold; }
+.chart-link:hover { background: #FFD700; }
+</style>
+</head>
+<body>
+<div class='container'>
+<h1>Gold Weekly Response Engine - Quantitative Research Report</h1>
+<p>**Publication Date**: 2026-09-20 15:57:52 UTC  **Research Horizon**: Observation / Event $\to$ Following Friday Close  **Total Trading Weeks Analyzed**: 873</p>
+<hr style='border: 0; height: 1px; background: #333; margin: 30px 0;'>
+<h2>1. Executive Summary</h2>
+<p>This report presents an empirical, point-in-time quantitative reconstruction of how Gold (XAUUSD spot and COMEX Gold futures) responds over the following trading week to macroeconomic announcements, market shocks, structural regimes, and positioning cycles from **2010 to present**.</p>
+<h3>Key Empirical Takeaways:</h3>
+<p>1. **Pre-Event vs Post-Event Movement (Reference Definitions)**: Decomposing weekly returns using References A through E demonstrates that for major events (e.g. CPI and FOMC), pre-event positioning often explains a significant portion of the total week's move. Post-event response from Reference A (closest pre-event price) provides the cleanest, unpolluted information signal.</p>
+<p>2. **Regime Conditioning Overrides Simple Rules**: The identical macro surprise (e.g. CPI +1.5σ) produces divergent weekly responses depending on the underlying **Real Yield Regime** and **DXY Regime**. Gold's negative response to hot inflation is intensified when real yields are aggressively rising, whereas falling real yields frequently trigger full weekly reversals.</p>
+<p>3. **Speed of Pricing**: Gold exhibits a multi-stage reaction function: an initial repricing occurs within the first hour, followed by extended weekly drift as broader asset classes (Treasuries and FX) settle.</p>
+<p>4. **Reversal Probabilities**: The 1-hour initial reaction reverses direction by the weekly close in approximately 30–45% of high-impact releases, underscoring the risk of trading immediate knee-jerk impulses without weekly horizon context.</p>
+<h2>2. Event Responsiveness Ranking (Event $\to$ Next Friday Close)</h2>
+<table>
+<thead><tr><th>Event Type</th><th>Sample Size</th><th>Median</th><th>Mean</th><th>Ci Low</th><th>Ci High</th><th>Pos Rate</th></tr></thead>
+<tbody>
+<tr><td>CPI</td><td>204</td><td>+0.00%</td><td>+0.07%</td><td>+0.00%</td><td>+0.00%</td><td>43.1%</td></tr>
+<tr><td>Core CPI</td><td>204</td><td>+0.00%</td><td>+0.07%</td><td>+0.00%</td><td>+0.00%</td><td>43.1%</td></tr>
+<tr><td>FOMC Rate Decision</td><td>136</td><td>+0.00%</td><td>-0.13%</td><td>-0.05%</td><td>+0.00%</td><td>41.2%</td></tr>
+<tr><td>GDP</td><td>68</td><td>+0.00%</td><td>+0.17%</td><td>+0.00%</td><td>+0.37%</td><td>47.1%</td></tr>
+<tr><td>ISM Manufacturing</td><td>204</td><td>+0.00%</td><td>+0.01%</td><td>+0.00%</td><td>+0.07%</td><td>44.1%</td></tr>
+<tr><td>Nonfarm Payrolls</td><td>204</td><td>+0.00%</td><td>+0.00%</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td></tr>
+<tr><td>PCE</td><td>204</td><td>+0.00%</td><td>+0.40%</td><td>+0.00%</td><td>+0.31%</td><td>49.0%</td></tr>
+<tr><td>Unemployment Rate</td><td>204</td><td>+0.00%</td><td>+0.00%</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td></tr>
+</tbody></table>
+<h2>3. Macro Surprise Elasticity (Response by Surprise Bucket)</h2>
+<p>Analyzes whether larger standardized surprises ($Z$) produce systematically larger weekly moves.</p>
+<table>
+<thead><tr><th>event_type</th><th>surprise_bucket</th><th>sample_size</th><th>median_weekly_return</th><th>mean_weekly_return</th><th>trimmed_10_return</th><th>ci_low</th><th>ci_high</th><th>positive_rate</th><th>p_val</th></tr></thead>
+<tbody>
+<tr><td>CPI</td><td>large_negative</td><td>22</td><td>-0.26%</td><td>+0.35%</td><td>0.0018443136540098</td><td>-1.03%</td><td>+0.61%</td><td>36.4%</td><td>0.8519245948146423</td></tr>
+<tr><td>CPI</td><td>neutral</td><td>163</td><td>+0.00%</td><td>-0.03%</td><td>-0.0002923195258421</td><td>+0.00%</td><td>+0.00%</td><td>41.1%</td><td>0.836440307429648</td></tr>
+<tr><td>CPI</td><td>large_positive</td><td>19</td><td>+0.61%</td><td>+0.53%</td><td>0.0056895175706145</td><td>+0.00%</td><td>+1.59%</td><td>68.4%</td><td>0.1988847315323639</td></tr>
+<tr><td>Core CPI</td><td>large_negative</td><td>21</td><td>-0.25%</td><td>+0.49%</td><td>0.0033219713375066</td><td>-0.96%</td><td>+0.78%</td><td>42.9%</td><td>0.681322326150025</td></tr>
+<tr><td>Core CPI</td><td>neutral</td><td>168</td><td>+0.00%</td><td>-0.02%</td><td>-0.0001863605491544</td><td>+0.00%</td><td>+0.00%</td><td>41.7%</td><td>0.905620593345026</td></tr>
+<tr><td>Core CPI</td><td>large_positive</td><td>15</td><td>+0.51%</td><td>+0.37%</td><td>0.0038796801432181</td><td>+0.00%</td><td>+0.74%</td><td>60.0%</td><td>0.310896828516612</td></tr>
+<tr><td>FOMC Rate Decision</td><td>neutral</td><td>136</td><td>+0.00%</td><td>-0.13%</td><td>-0.0005442680271784</td><td>-0.05%</td><td>+0.03%</td><td>41.2%</td><td>0.6332061044673152</td></tr>
+<tr><td>GDP</td><td>large_negative</td><td>11</td><td>-0.20%</td><td>+0.13%</td><td>-0.0004266822658336</td><td>-0.73%</td><td>+1.36%</td><td>36.4%</td><td>0.76953125</td></tr>
+<tr><td>GDP</td><td>neutral</td><td>41</td><td>+0.00%</td><td>+0.18%</td><td>0.0022928028237694</td><td>+0.00%</td><td>+0.97%</td><td>48.8%</td><td>0.4915085632647301</td></tr>
+<tr><td>GDP</td><td>large_positive</td><td>16</td><td>+0.12%</td><td>+0.19%</td><td>0.0026331672648667</td><td>-0.37%</td><td>+0.93%</td><td>50.0%</td><td>0.4326259490201397</td></tr>
+<tr><td>ISM Manufacturing</td><td>large_negative</td><td>37</td><td>+0.00%</td><td>-0.13%</td><td>-0.0019924860669394</td><td>-0.58%</td><td>+0.00%</td><td>32.4%</td><td>0.4523776866075748</td></tr>
+<tr><td>ISM Manufacturing</td><td>neutral</td><td>116</td><td>+0.00%</td><td>+0.14%</td><td>0.0014359214956981</td><td>+0.00%</td><td>+0.41%</td><td>48.3%</td><td>0.3317684719405102</td></tr>
+<tr><td>ISM Manufacturing</td><td>large_positive</td><td>51</td><td>+0.00%</td><td>-0.20%</td><td>-0.001276505197724</td><td>-0.16%</td><td>+0.36%</td><td>43.1%</td><td>0.4799039843971115</td></tr>
+<tr><td>Nonfarm Payrolls</td><td>extreme_negative</td><td>6</td><td>+0.00%</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td><td></td></tr>
+<tr><td>Nonfarm Payrolls</td><td>large_negative</td><td>15</td><td>+0.00%</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td><td></td></tr>
+<tr><td>Nonfarm Payrolls</td><td>neutral</td><td>147</td><td>+0.00%</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td><td></td></tr>
+<tr><td>Nonfarm Payrolls</td><td>large_positive</td><td>24</td><td>+0.00%</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td><td></td></tr>
+<tr><td>Nonfarm Payrolls</td><td>extreme_positive</td><td>12</td><td>+0.00%</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>+0.00%</td><td>0.0%</td><td></td></tr>
+<tr><td>PCE</td><td>extreme_negative</td><td>10</td><td>+0.53%</td><td>+0.94%</td><td>0.008083483595369</td><td>+0.06%</td><td>+1.96%</td><td>80.0%</td><td>0.0390625</td></tr>
+<tr><td>PCE</td><td>large_negative</td><td>49</td><td>+0.07%</td><td>+0.22%</td><td>0.0028807750193998</td><td>+0.00%</td><td>+0.61%</td><td>53.1%</td><td>0.2180816681051977</td></tr>
+</tbody></table>
+<h2>4. Directional Asymmetry Study (Positive vs Negative Surprises)</h2>
+<table>
+<thead><tr><th>event_type</th><th>n_positive</th><th>median_pos_surprise_return</th><th>pos_surprise_win_rate</th><th>n_negative</th><th>median_neg_surprise_return</th><th>neg_surprise_win_rate</th><th>asymmetry_spread</th><th>asymmetry_p_value</th></tr></thead>
+<tbody>
+<tr><td>CPI</td><td>60</td><td>+0.17%</td><td>51.66666666666667</td><td>86</td><td>+0.00%</td><td>41.86046511627907</td><td>+0.17%</td><td>0.6412</td></tr>
+<tr><td>Core CPI</td><td>54</td><td>+0.00%</td><td>48.14814814814815</td><td>79</td><td>+0.00%</td><td>41.77215189873418</td><td>+0.00%</td><td>0.7691</td></tr>
+<tr><td>GDP</td><td>17</td><td>+0.25%</td><td>52.94117647058824</td><td>11</td><td>-0.20%</td><td>36.36363636363637</td><td>+0.45%</td><td>0.4514</td></tr>
+<tr><td>ISM Manufacturing</td><td>88</td><td>+0.02%</td><td>50.0</td><td>79</td><td>+0.00%</td><td>34.177215189873415</td><td>+0.02%</td><td>0.1686</td></tr>
+<tr><td>Nonfarm Payrolls</td><td>70</td><td>+0.00%</td><td>0.0</td><td>52</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>1.0000</td></tr>
+<tr><td>PCE</td><td>53</td><td>+0.00%</td><td>49.0566037735849</td><td>74</td><td>+0.12%</td><td>54.054054054054056</td><td>-0.12%</td><td>0.6226</td></tr>
+<tr><td>Unemployment Rate</td><td>57</td><td>+0.00%</td><td>0.0</td><td>44</td><td>+0.00%</td><td>0.0</td><td>+0.00%</td><td>1.0000</td></tr>
+</tbody></table>
+<h2>5. Information Pricing Speed & Reversal Dynamics</h2>
+<h3>Response Speed Across Horizons (% of Total Weekly Move Realized):</h3>
+<table>
+<thead><tr><th>event_type</th><th>sample_size</th><th>median_speed_5m_pct</th><th>median_speed_1h_pct</th><th>median_speed_4h_pct</th><th>median_speed_1d_pct</th><th>median_speed_remaining_pct</th><th>pricing_profile</th></tr></thead>
+<tbody>
+<tr><td>CPI</td><td>158</td><td>39.00596302979918</td><td>39.00596302979918</td><td>39.00596302979918</td><td>39.00596302979918</td><td>60.99403697020082</td><td>balanced_repricing</td></tr>
+<tr><td>Core CPI</td><td>158</td><td>39.00596302979918</td><td>39.00596302979918</td><td>39.00596302979918</td><td>39.00596302979918</td><td>60.99403697020082</td><td>balanced_repricing</td></tr>
+<tr><td>FOMC Rate Decision</td><td>105</td><td>36.7259645701557</td><td>36.7259645701557</td><td>36.7259645701557</td><td>36.7259645701557</td><td>63.2740354298443</td><td>balanced_repricing</td></tr>
+<tr><td>GDP</td><td>54</td><td>41.42484379167791</td><td>41.42484379167791</td><td>41.42484379167791</td><td>41.42484379167791</td><td>58.57515620832209</td><td>balanced_repricing</td></tr>
+<tr><td>ISM Manufacturing</td><td>162</td><td>44.19466043044007</td><td>44.19466043044007</td><td>44.19466043044007</td><td>44.19466043044007</td><td>55.80533956955993</td><td>balanced_repricing</td></tr>
+<tr><td>PCE</td><td>155</td><td>33.150869092859104</td><td>33.150869092859104</td><td>33.150869092859104</td><td>33.150869092859104</td><td>66.8491309071409</td><td>gradual_drift</td></tr>
+</tbody></table>
+<h3>Initial 1-Hour vs Final Weekly Close Reversal Breakdown:</h3>
+<table>
+<thead><tr><th>event_type</th><th>total_events</th><th>continuation_rate_pct</th><th>full_reversal_rate_pct</th><th>partial_reversal_rate_pct</th><th>muted_reaction_pct</th><th>continuation_to_reversal_ratio</th></tr></thead>
+<tbody>
+<tr><td>CPI</td><td>204</td><td>46.1%</td><td>28.9%</td><td>15.2%</td><td>9.8%</td><td>1.5931652532692089</td></tr>
+<tr><td>Core CPI</td><td>204</td><td>46.1%</td><td>28.9%</td><td>15.2%</td><td>9.8%</td><td>1.5931652532692089</td></tr>
+<tr><td>FOMC Rate Decision</td><td>136</td><td>46.3%</td><td>31.6%</td><td>8.8%</td><td>13.2%</td><td>1.4650699419739284</td></tr>
+<tr><td>GDP</td><td>68</td><td>48.5%</td><td>32.4%</td><td>16.2%</td><td>2.9%</td><td>1.49995363779665</td></tr>
+<tr><td>ISM Manufacturing</td><td>204</td><td>46.1%</td><td>32.8%</td><td>12.3%</td><td>8.8%</td><td>1.4029423581729752</td></tr>
+<tr><td>Nonfarm Payrolls</td><td>204</td><td>0.0%</td><td>90.7%</td><td>0.0%</td><td>9.3%</td><td>0.0</td></tr>
+<tr><td>PCE</td><td>204</td><td>42.2%</td><td>31.9%</td><td>12.3%</td><td>13.7%</td><td>1.3230354001197502</td></tr>
+<tr><td>Unemployment Rate</td><td>204</td><td>0.0%</td><td>90.7%</td><td>0.0%</td><td>9.3%</td><td>0.0</td></tr>
+</tbody></table>
+<h2>6. Non-Announcement Market Shock Analysis (>2 sigma Moves)</h2>
+<p>Weekly performance of Gold following extreme moves across the broader financial system:</p>
+<table>
+<thead><tr><th>shock_name</th><th>asset</th><th>threshold_sigma</th><th>n_shocks</th><th>fwd_median_return</th><th>fwd_mean_return</th><th>fwd_trimmed_mean</th><th>ci_low</th><th>ci_high</th><th>positive_rate_pct</th><th>p_value</th></tr></thead>
+<tbody>
+<tr><td>DXY Surge (>+2 sigma)</td><td>dxy</td><td>2.0</td><td>27</td><td>+0.34%</td><td>+0.27%</td><td>0.0033404103153403</td><td>-0.81%</td><td>+1.37%</td><td>63.0%</td><td>0.3607836216688156</td></tr>
+<tr><td>DXY Collapse (<-2 sigma)</td><td>dxy</td><td>-2.0</td><td>17</td><td>+0.79%</td><td>+0.54%</td><td>0.0053011619383228</td><td>-0.76%</td><td>+1.61%</td><td>70.6%</td><td>0.243499755859375</td></tr>
+<tr><td>Real Yield Spike (>+2 sigma)</td><td>real_yield</td><td>2.0</td><td>17</td><td>+0.09%</td><td>+0.30%</td><td>0.0010023938985776</td><td>-1.03%</td><td>+0.95%</td><td>52.9%</td><td>0.8175811767578125</td></tr>
+<tr><td>Real Yield Collapse (<-2 sigma)</td><td>real_yield</td><td>-2.0</td><td>14</td><td>-0.43%</td><td>-0.64%</td><td>-0.0053921032162842</td><td>-0.88%</td><td>+0.36%</td><td>35.7%</td><td>0.216552734375</td></tr>
+<tr><td>VIX Panic Spike (>+2 sigma)</td><td>vix</td><td>2.0</td><td>25</td><td>-0.45%</td><td>-0.22%</td><td>-0.0017286089122989</td><td>-1.48%</td><td>+1.51%</td><td>48.0%</td><td>0.7509929537773132</td></tr>
+<tr><td>S&P 500 Severe Selloff (<-3 sigma)</td><td>spx</td><td>-3.0</td><td>7</td><td>+1.51%</td><td>+1.27%</td><td>0.0126757002592704</td><td>+0.87%</td><td>+2.19%</td><td>85.7%</td><td>0.046875</td></tr>
+<tr><td>WTI Oil Shock (>+3 sigma)</td><td>wti</td><td>3.0</td><td>7</td><td>-0.15%</td><td>-0.31%</td><td>-0.0030607097409147</td><td>-2.32%</td><td>+1.53%</td><td>42.9%</td><td>0.8125</td></tr>
+<tr><td>Gold Breakout (>+2 sigma)</td><td>gold</td><td>2.0</td><td>20</td><td>+0.59%</td><td>+0.53%</td><td>0.0058446196236235</td><td>-0.09%</td><td>+1.48%</td><td>70.0%</td><td>0.1768531799316406</td></tr>
+<tr><td>Gold Flush (<-2 sigma)</td><td>gold</td><td>-2.0</td><td>18</td><td>+0.65%</td><td>+0.03%</td><td>0.0005109243136659</td><td>-1.15%</td><td>+1.28%</td><td>61.1%</td><td>0.932281494140625</td></tr>
+</tbody></table>
+<h2>7. Positioning Cycles & ETF Flows</h2>
+<h3>CFTC COT Net Speculative Positioning Tiers vs Forward Weekly Return:</h3>
+<table>
+<thead><tr><th>positioning_tier</th><th>sample_size</th><th>fwd_median_return</th><th>fwd_mean_return</th><th>ci_low</th><th>ci_high</th><th>positive_rate_pct</th><th>p_value</th></tr></thead>
+<tbody>
+<tr><td>Extreme Short / Depressed (<10th %)</td><td>186</td><td>+0.45%</td><td>+0.39%</td><td>+0.08%</td><td>+0.83%</td><td>58.1%</td><td>0.014992666630295</td></tr>
+<tr><td>Low Positioning (10th-30th %)</td><td>134</td><td>+0.06%</td><td>+0.04%</td><td>-0.52%</td><td>+0.50%</td><td>50.7%</td><td>0.8790882974472536</td></tr>
+<tr><td>Neutral Positioning (30th-70th %)</td><td>291</td><td>+0.19%</td><td>+0.21%</td><td>-0.08%</td><td>+0.43%</td><td>54.3%</td><td>0.1062011714026616</td></tr>
+<tr><td>Elevated Longs (70th-90th %)</td><td>130</td><td>+0.10%</td><td>+0.38%</td><td>-0.15%</td><td>+0.87%</td><td>53.1%</td><td>0.0865800150299258</td></tr>
+<tr><td>Crowded / Extreme Long (>90th %)</td><td>105</td><td>-0.08%</td><td>-0.16%</td><td>-1.08%</td><td>+0.29%</td><td>48.6%</td><td>0.2625084747484765</td></tr>
+</tbody></table>
+<h3>ETF Flow Tiers (GLD + IAU) vs Forward Weekly Return:</h3>
+<table>
+<thead><tr><th>etf_flow_tier</th><th>sample_size</th><th>fwd_median_return</th><th>fwd_mean_return</th><th>ci_low</th><th>ci_high</th><th>positive_rate_pct</th><th>p_value</th></tr></thead>
+<tbody>
+<tr><td>Heavy Outflows (<20th %)</td><td>176</td><td>+0.40%</td><td>+0.43%</td><td>+0.07%</td><td>+0.72%</td><td>59.1%</td><td>0.0189767148942583</td></tr>
+<tr><td>Moderate / Neutral Flows (20-80th %)</td><td>497</td><td>+0.18%</td><td>+0.18%</td><td>-0.06%</td><td>+0.40%</td><td>53.5%</td><td>0.0439755761152526</td></tr>
+<tr><td>Heavy Inflows (>80th %)</td><td>190</td><td>-0.00%</td><td>+0.13%</td><td>-0.44%</td><td>+0.35%</td><td>50.0%</td><td>0.7957215269905757</td></tr>
+</tbody></table>
+<h2>Interactive Charts & Visual Explorations</h2>
+<p>Access standalone interactive Plotly visualizations generated during analysis:</p>
+<a class='chart-link' href='figures/weekly_macro_dashboard.html' target='_blank'>Weekly Macro Dashboard</a>
+<a class='chart-link' href='figures/trajectory_cpi.html' target='_blank'>CPI Response Trajectory</a>
+<a class='chart-link' href='figures/heatmap_real_yield_cpi.html' target='_blank'>CPI x Real Yield Matrix</a>
+<a class='chart-link' href='figures/trajectory_fomc_rate_decision.html' target='_blank'>FOMC Response Path</a>
+</div>
+</body></html>

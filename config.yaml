@@ -1,0 +1,114 @@
+# Gold Weekly Response Engine Configuration
+
+project:
+  name: "gold-weekly-response-engine"
+  version: "1.0.0"
+  timezone: "America/New_York"
+  base_currency: "USD"
+  start_year: 2010
+
+paths:
+  data_dir: "data"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  market_dir: "data/market"
+  macro_dir: "data/macro"
+  events_dir: "data/events"
+  weekly_dir: "data/weekly"
+  database_path: "database/gold_research.db"
+  reports_dir: "reports"
+  notebooks_dir: "notebooks"
+
+assets:
+  gold_spot: "XAUUSD=X"
+  gold_futures: "GC=F"
+  silver: "SI=F"
+  copper: "HG=F"
+  wti_crude: "CL=F"
+  brent_crude: "BZ=F"
+  dxy: "DX-Y.NYB"
+  dxy_proxy: "UUP"
+  eurusd: "EURUSD=X"
+  usdjpy: "USDJPY=X"
+  spx: "^GSPC"
+  ndx: "^IXIC"
+  rut: "^RUT"
+  vix: "^VIX"
+  gld_etf: "GLD"
+  iau_etf: "IAU"
+  hy_spread: "BAMLH0A0HYM2"
+
+macro_series:
+  real_yield_10y: "DFII10"
+  real_yield_5y: "DFII5"
+  treasury_2y: "DGS2"
+  treasury_5y: "DGS5"
+  treasury_10y: "DGS10"
+  treasury_30y: "DGS30"
+  cpi_level: "CPIAUCSL"
+  core_cpi_level: "CPILFESL"
+  pce_level: "PCEPI"
+  core_pce_level: "PCEPILFE"
+  nonfarm_payrolls: "PAYEMS"
+  unemployment_rate: "UNRATE"
+  initial_claims: "ICSA"
+  hy_oas: "BAMLH0A0HYM2"
+
+response_windows:
+  intraday_minutes: [1, 5, 15, 30, 60, 120, 240]
+  trading_days: [1, 3, 5]
+  primary_horizon: "next_friday_close"
+
+reference_definitions:
+  ref_a: "immediate_pre_event"
+  ref_b: "close_5m_prior"
+  ref_c: "close_1h_prior"
+  ref_d: "same_day_close"
+  ref_e: "previous_friday_close"
+
+regimes:
+  real_yield:
+    lookback_weeks: 4
+    threshold_method: "percentile"
+    lower_percentile: 33.3
+    upper_percentile: 66.7
+    labels: ["falling", "neutral", "rising"]
+  dxy:
+    lookback_weeks: 4
+    threshold_method: "percentile"
+    lower_percentile: 33.3
+    upper_percentile: 66.7
+    labels: ["weakening", "neutral", "strengthening"]
+  gold_trend:
+    ma_short_weeks: 20
+    ma_long_weeks: 50
+    labels: ["bearish", "sideways", "bullish"]
+  vix:
+    threshold_method: "percentile"
+    lower_percentile: 25.0
+    upper_percentile: 75.0
+    labels: ["low", "normal", "high"]
+  gold_volatility:
+    lookback_days: 20
+    threshold_method: "percentile"
+    lower_percentile: 25.0
+    upper_percentile: 75.0
+    labels: ["low", "normal", "high"]
+
+surprise_buckets:
+  z_scores:
+    extreme_negative: [-999.0, -2.0]
+    large_negative: [-2.0, -1.0]
+    neutral: [-1.0, 1.0]
+    large_positive: [1.0, 2.0]
+    extreme_positive: [2.0, 999.0]
+
+market_shocks:
+  sigma_threshold: 2.0
+  extreme_sigma_threshold: 3.0
+  assets: ["dxy", "real_yield", "vix", "spx", "wti", "gold"]
+
+statistics:
+  bootstrap_iterations: 2000
+  confidence_level: 0.95
+  trimmed_mean_percentile: 0.10
