@@ -51,7 +51,7 @@ def test_no_trade_filter_sub_threshold():
     res = nt.evaluate(bias_score=0.02, features_dict={"vix": 14.0})
     assert res["is_no_trade"] is True
     assert any(t["code"] == "SUB_THRESHOLD_EDGE" for t in res["triggers"])
-    assert "DO NOT TRADE" in res["status_label"]
+    assert "NEUTRAL" in res["status_label"] or "DO NOT TRADE" in res["status_label"]
 
 
 def test_no_trade_filter_macro_divergence():

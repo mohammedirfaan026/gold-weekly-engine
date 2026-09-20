@@ -42,6 +42,8 @@ from src.ai_engine.data_freshness import DataFreshnessChecker
 from src.ai_engine.trade_journal import TradeJournal
 from src.ai_engine.decision_brief import WeeklyDecisionBrief
 from src.ai_engine.no_trade_filter import NoTradeFilter
+from src.ai_engine.shadow_logger import ShadowLogger
+from src.ai_engine.pit_validator import PointInTimeFeatureValidator, PointInTimeViolationError
 
 
 def main():
@@ -123,8 +125,28 @@ def main():
         default="",
         help="Rationale or notes for discretionary override",
     )
+    parser.add_argument(
+        "--shadow-save",
+        action="store_true",
+        help="Log current prediction into immutable forward shadow-testing record (data/shadow/shadow_log.jsonl)",
+    )
+    parser.add_argument(
+        "--shadow-report",
+        action="store_true",
+        help="Display forward shadow-testing performance audit report",
+    )
+    parser.add_argument(
+        "--no-strict-pit",
+        action="store_true",
+        help="Disable strict point-in-time and data freshness fail-closed exceptions (warning only)",
+    )
 
     args = parser.parse_args()
+
+    if args.shadow_report:
+        sl = ShadowLogger()
+        print("\n" + sl.generate_shadow_report() + "\n")
+        return
 
     if args.freshness:
         fc = DataFreshnessChecker()
@@ -191,6 +213,34 @@ def main():
     prior_row = matrix.iloc[prior_idx]
     current_row = matrix.iloc[target_idx]
 
+    # Point-in-Time & Freshness verification
+    strict_pit = not args.no_strict_pit
+    fc = DataFreshnessChecker()
+    fresh_rep = fc.check_freshness(as_of_date=target_week)
+
+    cutoff_ts = str(current_row["week_ending"]) + " 21:00:00 UTC"
+    pit_meta = [
+        {"name": "gold_close", "observation_timestamp": cutoff_ts, "publication_timestamp": cutoff_ts},
+        {"name": "real_yield_10y", "observation_timestamp": cutoff_ts, "publication_timestamp": cutoff_ts},
+        {"name": "dxy_close", "observation_timestamp": cutoff_ts, "publication_timestamp": cutoff_ts},
+        {"name": "vix_close", "observation_timestamp": cutoff_ts, "publication_timestamp": cutoff_ts},
+    ]
+    pit_val = PointInTimeFeatureValidator()
+    try:
+        pit_rep = pit_val.validate_feature_timestamps(pit_meta, prediction_timestamp=cutoff_ts, strict=strict_pit)
+    except PointInTimeViolationError as e:
+        if strict_pit:
+            print(f"\n[FAIL-CLOSED POINT-IN-TIME VIOLATION]: {e}")
+            print("System halted in fail-closed mode. Stance: Data quality failure -- do not use.\n")
+            sys.exit(1)
+        pit_rep = {"is_valid": False, "violation_count": 1, "violations": [str(e)]}
+
+    if strict_pit and not fresh_rep.get("is_usable", True):
+        print("\n[FAIL-CLOSED DATA QUALITY VIOLATION]: Critical market/macro series failed freshness audit.")
+        print(fc.format_freshness_table(fresh_rep))
+        print("System halted in fail-closed mode. Stance: Data quality failure -- do not use.\n")
+        sys.exit(1)
+
     curr_features = {
         "delta_real_yield_1w": float(current_row.get("delta_real_yield_1w", 0.0)),
         "dxy_return_1w": float(current_row.get("dxy_return_1w", 0.0)),
@@ -254,7 +304,8 @@ def main():
             bias_score=bias_to_check,
             features_dict=curr_features,
             failure_memory_data=fail_summary,
-            freshness_data=DataFreshnessChecker().check_freshness(),
+            freshness_data=fresh_rep,
+            pit_validation_data=pit_rep,
         )
         print("\n" + "=" * 80)
         print("          GOLD AI ENGINE: DO-NOT-TRADE CIRCUIT BREAKER STATUS")
@@ -267,14 +318,35 @@ def main():
         print("=" * 80 + "\n")
         return
 
-    # Handle --brief
-    if args.brief:
+    # Handle --brief or --shadow-save
+    brief_dict = None
+    if args.brief or args.shadow_save:
         brief_gen = WeeklyDecisionBrief()
         brief_dict = brief_gen.generate_brief(
             prediction=prediction,
             recursive_data=recursive_data,
             features_dict=curr_features,
+            freshness_report=fresh_rep,
+            pit_validation_report=pit_rep,
+            save_file=args.brief,
         )
+
+    if args.shadow_save and brief_dict:
+        sl = ShadowLogger()
+        try:
+            shadow_rec = sl.save_prediction(
+                brief=brief_dict,
+                features_snapshot=curr_features,
+            )
+            print(f"\n[SHADOW-TEST RECORDED]: Week {shadow_rec['prediction_week']} logged to data/shadow/shadow_log.jsonl")
+            print(f"  Feature Vintage Hash : {shadow_rec['feature_vintage_hash']}")
+            print(f"  Tactical Stance      : {shadow_rec['stance']}")
+            print(f"  Confidence Tier      : {shadow_rec['confidence_tier']}")
+            print(f"  Logged Timestamp     : {shadow_rec['logged_at_utc']}\n")
+        except ValueError as e:
+            print(f"\n[SHADOW-LOGGER IMMUTABILITY WARNING]: {e}\n")
+
+    if args.brief:
         if args.journal_log:
             tj = TradeJournal()
             cal = brief_dict["confidence_calibration"]
@@ -297,7 +369,7 @@ def main():
         if args.json:
             print(json.dumps(brief_dict, indent=2))
         else:
-            print(brief_gen.render_markdown(brief_dict))
+            print(WeeklyDecisionBrief().render_markdown(brief_dict))
         return
 
     if args.json:

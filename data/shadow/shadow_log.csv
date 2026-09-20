@@ -1,0 +1,2 @@
+prediction_week,prediction_timestamp,logged_at_utc,model_version,git_commit,bias_score,expected_return,corridor_low,corridor_high,stance,confidence_tier,no_trade_status,feature_vintage_hash,realized_next_week_return,directional_correctness,corridor_containment,post_mortem_result,outcome_resolved_at
+2026-09-18,2026-09-18 21:00:00+00:00,2026-09-20 14:27:07 UTC,v1.2.0-decision-support,2f2978b4,-0.031,-0.0013999999999999998,5998.85,6496.13,Neutral / no directional edge,LOW,NEUTRAL / NO DIRECTIONAL EDGE,7a88058a3aba16bb,,,,,

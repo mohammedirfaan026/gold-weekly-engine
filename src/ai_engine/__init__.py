@@ -20,6 +20,9 @@ from src.ai_engine.confidence_calibrator import ConfidenceCalibrator
 from src.ai_engine.no_trade_filter import NoTradeFilter
 from src.ai_engine.trade_journal import TradeJournal
 from src.ai_engine.decision_brief import WeeklyDecisionBrief
+from src.ai_engine.pit_validator import PointInTimeFeatureValidator, PointInTimeViolationError
+from src.ai_engine.shadow_logger import ShadowLogger
+from src.ai_engine.versioning import get_system_version_info, MODEL_VERSION
 
 __all__ = [
     "MacroBiasEstimator",
@@ -37,4 +40,9 @@ __all__ = [
     "NoTradeFilter",
     "TradeJournal",
     "WeeklyDecisionBrief",
+    "PointInTimeFeatureValidator",
+    "PointInTimeViolationError",
+    "ShadowLogger",
+    "get_system_version_info",
+    "MODEL_VERSION",
 ]
