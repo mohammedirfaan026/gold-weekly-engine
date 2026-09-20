@@ -1,0 +1,9 @@
+Model,Accuracy_26w,Pos_Precision_26w,Neg_Precision_26w,IC_26w,IC_p_26w,Sharpe_26w,Cum_Return_26w,Max_DD_26w,RMSE_26w,Disagreed_Weeks,Score_on_Disagreements,McNemar_p,Diebold_Mariano_p
+M1: Real Yield Only,50.0,50.0,50.0,0.319,0.1122,-0.66,-6.23,-9.81,0.0235,0/26,0 wins vs 0 (M1),1.0,1.0
+M2: Real Yield + DXY,53.85,52.0,100.0,0.1617,0.43,-0.4,-4.12,-9.69,0.0237,3/26,2 wins vs 1 (M1),1.0,0.3915
+M3: Real Yield + Gold Trend,57.69,54.5,75.0,0.3429,0.0864,0.6,4.62,-7.49,0.0235,2/26,2 wins vs 0 (M1),0.4795,0.9913
+M4: Real Yield + DXY + Trend,53.85,52.0,100.0,0.3244,0.1059,-0.4,-4.12,-9.69,0.0237,3/26,2 wins vs 1 (M1),1.0,0.634
+M5: Real Yield + All Rates,53.85,52.2,66.7,0.2909,0.1493,0.3,1.91,-7.49,0.0233,1/26,1 wins vs 0 (M1),1.0,0.0768
+M1_econ: Real Yield Constrained,50.0,50.0,N/A,-0.1015,0.6216,-0.6,-5.79,-11.27,0.024,4/26,2 wins vs 2 (M1),0.6171,0.2908
+M6: Full Production AI Model,50.0,50.0,N/A,-0.1774,0.3859,-0.6,-5.79,-11.27,0.0241,4/26,2 wins vs 2 (M1),0.6171,0.2779
+M6_bias: Production Bias Score,46.15,46.7,45.5,-0.1406,0.4934,-0.79,-7.29,-17.25,0.0348,15/26,7 wins vs 8 (M1),1.0,0.0459
