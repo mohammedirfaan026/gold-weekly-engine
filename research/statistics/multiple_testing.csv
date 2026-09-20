@@ -1,0 +1,13 @@
+hypothesis_id,hypothesis_name,observed_correlation,raw_p_value,fdr_adjusted_q_val,bonferroni_p_val,evidence_quality
+H01,Real Yield Inverse Effect,0.0793,0.0192,0.2302,0.2302,REJECTED
+H02,DXY Dollar Inverse Effect,-0.0313,0.3565,1.0,1.0,WEAK
+H03,Gold Trend Momentum,-0.0272,0.4227,1.0,1.0,REJECTED
+H04,VIX Shock Safe Haven,-0.0397,0.242,1.0,1.0,REJECTED
+H05,Equity Crash Shock,0.0127,0.7081,1.0,1.0,WEAK
+H06,COT Speculative Reversal,-0.0378,0.2644,1.0,1.0,WEAK
+H07,ETF Flow Persistence,-0.015,0.6579,1.0,1.0,REJECTED
+H08,CPI Upside Surprise,-0.0024,0.9439,1.0,1.0,REJECTED
+H09,NFP Upside Surprise,0.0196,0.5635,1.0,1.0,REJECTED
+H10,FOMC Decision Surprise,0.0,1.0,1.0,1.0,WEAK
+H11,Breakeven Inflation Expansion,0.0,1.0,1.0,1.0,REJECTED
+H12,1-Week Mean Reversion,0.0103,0.7623,1.0,1.0,REJECTED

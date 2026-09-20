@@ -1,0 +1,13 @@
+hypothesis_id,hypothesis_name,feature,sample_size,expected_sign,observed_correlation,t_statistic,raw_p_value,description,fdr_adjusted_q_val,bonferroni_p_val,statistical_verdict,evidence_quality
+H01,Real Yield Inverse Effect,delta_real_yield_1w,872,-1,0.0793,2.35,0.0192,Rising 10Y TIPS real yields predict lower next-week gold returns.,0.2302,0.2302,REJECTED_CONTRARY_SIGN,REJECTED
+H02,DXY Dollar Inverse Effect,dxy_return_1w,872,-1,-0.0313,-0.92,0.3565,Rising USD index predicts lower next-week gold returns.,1.0,1.0,FAIL_TO_REJECT (Underpowered),WEAK
+H03,Gold Trend Momentum,gold_trend,872,1,-0.0272,-0.8,0.4227,Positive gold trend (Close > 20w MA > 50w MA) predicts positive next-week return.,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H04,VIX Shock Safe Haven,vix_shock_z,872,1,-0.0397,-1.17,0.242,Surging volatility (>2 sigma VIX spike) predicts positive gold safe-haven response.,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H05,Equity Crash Shock,sp500_shock_neg2s,872,1,0.0127,0.37,0.7081,Severe S&P 500 weekly drawdown (<= -2 sigma) leads to positive gold response.,1.0,1.0,FAIL_TO_REJECT (Underpowered),WEAK
+H06,COT Speculative Reversal,cot_percentile_3y,872,-1,-0.0378,-1.12,0.2644,Extreme net speculative positioning (>90th pctile) leads to mean-reverting downward pressure.,1.0,1.0,FAIL_TO_REJECT (Underpowered),WEAK
+H07,ETF Flow Persistence,etf_flow,872,1,-0.015,-0.44,0.6579,Positive physical gold ETF weekly net inflows predict positive next-week return.,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H08,CPI Upside Surprise,cpi_zscore,872,1,-0.0024,-0.07,0.9439,Higher-than-expected CPI inflation surprise produces positive gold return.,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H09,NFP Upside Surprise,nfp_zscore,872,-1,0.0196,0.58,0.5635,"Strong Nonfarm Payrolls report raises Fed hike expectations, depressing gold.",1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H10,FOMC Decision Surprise,fomc_zscore,872,-1,0.0,0.0,1.0,Hawkish Fed rate surprise depresses gold.,1.0,1.0,FAIL_TO_REJECT (Underpowered),WEAK
+H11,Breakeven Inflation Expansion,delta_breakeven_1w,872,1,0.0,0.0,1.0,Rising 10Y breakeven inflation expectations support gold prices.,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED
+H12,1-Week Mean Reversion,gold_return_1w,872,-1,0.0103,0.3,0.7623,Negative auto-correlation in raw weekly gold return (short-term mean reversion).,1.0,1.0,REJECTED_CONTRARY_SIGN,REJECTED

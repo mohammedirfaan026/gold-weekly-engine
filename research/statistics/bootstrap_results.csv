@@ -1,0 +1,2 @@
+n_bootstraps,block_size,ic_mean,ic_ci_lower,ic_ci_upper,sharpe_mean,sharpe_ci_lower,sharpe_ci_upper,p_ic_positive
+2000,8,0.03388343637222408,-0.06664929916373474,0.1336474007380375,0.6654327907748789,-0.018099841499942503,1.3288000250449774,0.743
