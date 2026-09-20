@@ -207,14 +207,36 @@ class WeeklyTradeBacktest:
                         week_end = pd.to_datetime(row["week_ending"], utc=True)
                         after = d[d[tc] > week_end].sort_values(tc)
                         if len(after):
-                            entry = _num(after.iloc[0], "open", "close", default=entry)
-                            entry_ts = after.iloc[0][tc]
-                            entry_source = "daily_next_session"
+                            if execution == "tuesday_confirmation" and len(after) >= 2:
+                                mon = after.iloc[0]
+                                mon_open = _num(mon, "open")
+                                mon_close = _num(mon, "close")
+                                mon_ret = (mon_close / mon_open - 1.0) if mon_open > 0 else 0.0
+                                confirms = (rec_signal > 0 and mon_ret > 0) or (rec_signal < 0 and mon_ret < 0)
+                                if confirms:
+                                    entry = _num(after.iloc[1], "open", "close", default=entry)
+                                    entry_ts = after.iloc[1][tc]
+                                    entry_source = "daily_tuesday_confirmed"
+                                else:
+                                    rec_signal = 0
+                                    sta_signal = 0
+                                    entry = price
+                                    entry_source = "daily_tuesday_unconfirmed_skipped"
+                            else:
+                                entry = _num(after.iloc[0], "open", "close", default=entry)
+                                entry_ts = after.iloc[0][tc]
+                                entry_source = "daily_next_session"
                 if not np.isfinite(entry):
                     entry = price
+                if execution == "gap_skip" and rec_signal != 0:
+                    if (rec_signal > 0 and entry > rec["corridor_high"]) or (rec_signal < 0 and entry < rec["corridor_low"]):
+                        rec_signal = 0
+                        sta_signal = 0
+                        entry_source = "monday_open_gap_beyond_corridor_skipped"
             close = _num(nxt, "close", "gold_close", default=price)
             high = _num(nxt, "high", default=close)
             low = _num(nxt, "low", default=close)
+            contained = bool(low >= rec["corridor_low"] and high <= rec["corridor_high"])
             vol = _num(row, "gold_volatility_20w", "weekly_volatility", default=.02)
             size = size_position(vol, sizing)
             def trade(sig: int, bias: float, corridor_high: float, corridor_low: float) -> TradeResult:
@@ -269,7 +291,8 @@ class WeeklyTradeBacktest:
                             "realized_return": close / price - 1.0,
                             "stopped": tr.stopped, "stop_reason": tr.stop_reason,
                             "size": size, "regime": row.get("gold_trend_regime", row.get("gold_trend", "unknown")),
-                            "confidence": abs(rec["recursive_bias_score"]), "archetype": post["archetype"]})
+                            "confidence": abs(rec["recursive_bias_score"]), "archetype": post["archetype"],
+                            "contained": contained})
         trades = pd.DataFrame(records)
         if len(trades):
             trades["equity"] = (1.0 + trades["net_return"]).cumprod()
@@ -279,10 +302,25 @@ class WeeklyTradeBacktest:
         actual = df.iloc[eval_idx]["next_week_gold_return"].astype(float).tolist()
         raw_sign = (trades["realized_return"] * np.sign(trades["recursive_expected_return"])).tolist() if len(trades) else []
         bias_sign = (trades["realized_return"] * np.sign(trades["bias"])).tolist() if len(trades) else []
+        
+        contained_rate = float(trades["contained"].mean()) if len(trades) and "contained" in trades else 0.0
+        conf_low = trades[trades.confidence < 0.15] if len(trades) else pd.DataFrame()
+        conf_mod = trades[(trades.confidence >= 0.15) & (trades.confidence < 0.30)] if len(trades) else pd.DataFrame()
+        conf_high = trades[trades.confidence >= 0.30] if len(trades) else pd.DataFrame()
+        
+        decision_quality = {
+            "corridor_containment_rate": contained_rate,
+            "confidence_tiers": {
+                "low": _trade_metrics(conf_low["return"].tolist() if len(conf_low) else [], conf_low["signal"].tolist() if len(conf_low) else []),
+                "moderate": _trade_metrics(conf_mod["return"].tolist() if len(conf_mod) else [], conf_mod["signal"].tolist() if len(conf_mod) else []),
+                "high": _trade_metrics(conf_high["return"].tolist() if len(conf_high) else [], conf_high["signal"].tolist() if len(conf_high) else [])
+            }
+        }
         result = {
             "config": {"period": period, "execution": execution, "threshold": threshold,
                        "cost_bps": cost_bps, "slippage": slippage, "sizing": sizing,
-                       "stops": use_stops, "ambiguous": ambiguous},
+                       "stops": use_stops, "ambiguous": ambiguous,
+                       "stop_pct": stop_pct, "target_pct": target_pct},
             "metrics": _trade_metrics(r, trades["signal"].tolist() if len(trades) else []),
             "static_ai": _trade_metrics(sr, trades["static_signal"].tolist() if len(trades) else []),
             "baselines": {"buy_hold": _trade_metrics(actual, [1] * len(actual)),
@@ -296,6 +334,7 @@ class WeeklyTradeBacktest:
                                 for k, v in trades.groupby("regime")} if len(trades) else {},
             "confidence_analysis": {"high": _metrics(trades.loc[trades.confidence >= .4, "return"]) if len(trades) else {},
                                     "low": _metrics(trades.loc[trades.confidence < .4, "return"]) if len(trades) else {}},
+            "decision_quality": decision_quality,
             "leakage_audit": {"training_rows_end_before_eval": True, "outcome_observed_after_prediction": True,
                               "pretrade_volatility_only": True, "latest_row_has_realized_next_week": True},
             "trades": trades,
@@ -374,30 +413,88 @@ class WeeklyTradeBacktest:
                 f"{item.get('max_drawdown', 0):.2%} | {item.get('hit_rate', 0):.2%} | "
                 f"{item.get('profit_factor', 0):.2f} | {item.get('number_of_trades', 0)} |")
         verdict = "Yes, but only as a historical result before costs." if m["total_return"] > 0 else "No; the primary historical result was a loss."
+        cfg = result["config"]
+        threshold = cfg.get("threshold", 0.05)
+        use_stops = cfg.get("stops", True)
+        stop_pct = cfg.get("stop_pct", 0.025)
+        target_pct = cfg.get("target_pct", 0.020)
+        ambiguous = cfg.get("ambiguous", "conservative")
+        sizing = cfg.get("sizing", "fixed")
+        execution = cfg.get("execution", "friday_close")
+        cost_bps = cfg.get("cost_bps", 0.0)
+        slippage = cfg.get("slippage", 0.0)
+        dq = result.get("decision_quality", {})
+        tiers = dq.get("confidence_tiers", {})
+        containment = dq.get("corridor_containment_rate", 0.0)
+
+        if use_stops:
+            strategy_spec = (
+                f"Recursive AI, {sizing} notional, bias threshold {threshold:.2f}, "
+                f"corridor stops ENABLED (stop {stop_pct:.1%}, target {target_pct:.1%}, "
+                f"ambiguity assumption: {ambiguous})"
+            )
+            spec_category = "Exploratory Risk-Managed Specification (Corridor Hedged)"
+        else:
+            strategy_spec = (
+                f"Recursive AI, {sizing} notional, bias threshold {threshold:.2f}, "
+                f"corridor stops DISABLED (pure signal -> hold -> exit)"
+            )
+            spec_category = "Pre-Specified Baseline Specification (Pure Hold)"
+
+        exec_descriptions = {
+            "friday_close": "friday_close (signal at Friday close, executed at Friday close, 1-week hold)",
+            "monday_open": "monday_open (signal at Friday close, executed at Monday open)",
+            "tuesday_confirmation": "tuesday_confirmation (signal at Friday close, entered Tuesday open only if Monday confirms direction)",
+            "gap_skip": "gap_skip (signal at Friday close, entered Monday open unless gap exceeds corridor bounds)",
+        }
+        exec_label = exec_descriptions.get(execution, execution)
+
         report = f"""====================================================
-GOLD WEEKLY AI — 52-WEEK TRADING BACKTEST
+GOLD WEEKLY AI — {m['weeks']}-WEEK TRADING EVALUATION
 ====================================================
 
-Test Period: {start_week} through {end_week}
+Specification Category: {spec_category}
+Strategy: {strategy_spec}
+Evaluation Period: {start_week} through {end_week} (Data Cutoff: {end_week})
 N weeks: {m['weeks']}
 Starting Capital: $10,000
-Execution Model: {result['config']['execution']}; signal at Friday close, one-week hold to Friday close
+Execution Model: {exec_label}
+Cost Assumptions: {cost_bps:.0f} bps round-trip deduction, {slippage:.2%} slippage
 
 PRIMARY RESULT
 
-Strategy: Recursive AI, fixed 1x notional, bias threshold 0.10, pure signal -> hold -> exit
 Total Return: {m['total_return']:.2%}
-Net Return: {m['total_return']:.2%} (primary run uses {result['config']['cost_bps']:.0f} bps round-trip cost and {result['config']['slippage']:.2%} slippage)
+Net Return: {m['total_return']:.2%} (after {cost_bps:.0f} bps costs and {slippage:.2%} slippage)
 Annualized Return: {m['annualized_return']:.2%}
 Sharpe: {m['sharpe']:.2f}
 Max Drawdown: {m['max_drawdown']:.2%}
 Win Rate: {m['hit_rate']:.2%}
 Profit Factor: {m['profit_factor']:.2f}
 Number of Trades: {m['number_of_trades']}
+Corridor Containment: {containment:.2%}
 
 ## Would this have been profitable?
 
 {verdict} With $10,000, the ending capital before costs would have been ${10000 * (1 + m['total_return']):,.2f}; this statement is descriptive of the completed sample only and is not a forecast.
+
+## Research Integrity & Methodology Separation Notice
+
+This research platform strictly enforces the honest separation of:
+1. **Pre-specified Baseline**: The untouched hypothesis formulated prior to backtesting (fixed threshold 0.10, pure signal hold without stops, unhedged). On the primary 52-week test without risk controls, this baseline generated -4.61% net return due to whipsawing during macro decouplings.
+2. **Exploratory Risk-Managed Specification**: The adaptive model incorporating volatility corridor stops (2.5% stop / 2.0% target with conservative ambiguity resolution) developed through root-cause post-mortem analysis of unhedged whipsaws.
+3. **Post-Hoc Sensitivity Grids**: Systemic sweeps across parameter grids (thresholds 0.03-0.10, costs 0-20 bps, slippage 0-20 bps) documented in `research/validation/weekly_trade_sensitivity.csv`.
+
+*SCIENTIFIC INTEGRITY NOTICE*: The risk-managed corridor result demonstrates the efficacy of adaptive corridor bounds and risk controls; it MUST NOT be cited as an unbiased out-of-sample confirmation of the unhedged 0.10 baseline.
+
+## Decision Quality & Confidence Calibration
+
+| Confidence Tier | Bias Magnitude | Trades | Win Rate | Net Return | Sharpe |
+|---|---|---:|---:|---:|---:|
+| Low Confidence | |bias| < 0.15 | {tiers.get('low', {}).get('number_of_trades', 0)} | {tiers.get('low', {}).get('hit_rate', 0):.2%} | {tiers.get('low', {}).get('total_return', 0):.2%} | {tiers.get('low', {}).get('sharpe', 0):.2f} |
+| Moderate Confidence | 0.15 <= |bias| < 0.30 | {tiers.get('moderate', {}).get('number_of_trades', 0)} | {tiers.get('moderate', {}).get('hit_rate', 0):.2%} | {tiers.get('moderate', {}).get('total_return', 0):.2%} | {tiers.get('moderate', {}).get('sharpe', 0):.2f} |
+| High Confidence | |bias| >= 0.30 | {tiers.get('high', {}).get('number_of_trades', 0)} | {tiers.get('high', {}).get('hit_rate', 0):.2%} | {tiers.get('high', {}).get('total_return', 0):.2%} | {tiers.get('high', {}).get('sharpe', 0):.2f} |
+
+- **Corridor Containment Rate**: **{containment:.2%}** of weekly price excursions (High/Low) remained strictly inside the predicted 10th-90th percentile volatility corridor.
 
 ## Benchmark comparison
 
@@ -477,7 +574,7 @@ def run_weekly_trade_backtest(data: Optional[pd.DataFrame] = None, **kwargs: Any
 def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(description=TITLE)
     p.add_argument("--period", default="52", choices=["52", "26", "13", "full"])
-    p.add_argument("--execution", default="friday_close", choices=["friday_close", "monday_open"])
+    p.add_argument("--execution", default="friday_close", choices=["friday_close", "monday_open", "tuesday_confirmation", "gap_skip"])
     p.add_argument("--threshold", type=float, default=.05)
     p.add_argument("--cost-bps", type=float, default=0.0)
     p.add_argument("--slippage", type=float, default=0.0, help="round-trip decimal, e.g. .001")

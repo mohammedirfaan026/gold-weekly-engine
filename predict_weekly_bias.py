@@ -38,6 +38,10 @@ from src.ai_engine.recursive_learner import (
     RecursiveSelfImprovingEngine,
     FailureArchetype,
 )
+from src.ai_engine.data_freshness import DataFreshnessChecker
+from src.ai_engine.trade_journal import TradeJournal
+from src.ai_engine.decision_brief import WeeklyDecisionBrief
+from src.ai_engine.no_trade_filter import NoTradeFilter
 
 
 def main():
@@ -76,8 +80,84 @@ def main():
         action="store_true",
         help="Execute 8-fold purged walk-forward validation (2018-2026) and report metrics",
     )
+    parser.add_argument(
+        "--brief",
+        action="store_true",
+        help="Generate institutional live weekly Decision Brief (with scenario map, confidence tiers, and no-trade circuit breakers)",
+    )
+    parser.add_argument(
+        "--freshness",
+        action="store_true",
+        help="Display data pipeline freshness, observation cutoffs, and publication lag audit",
+    )
+    parser.add_argument(
+        "--no-trade-check",
+        action="store_true",
+        help="Run standalone evaluation of Do-Not-Trade circuit breakers",
+    )
+    parser.add_argument(
+        "--journal-history",
+        action="store_true",
+        help="Display complete history of logged discretionary trader decisions",
+    )
+    parser.add_argument(
+        "--journal-stats",
+        action="store_true",
+        help="Display decision quality metrics comparing Follow vs Override performance",
+    )
+    parser.add_argument(
+        "--journal-log",
+        action="store_true",
+        help="Log a discretionary decision for the current week into the trade journal",
+    )
+    parser.add_argument(
+        "--decision",
+        type=str,
+        default="FOLLOW",
+        choices=["FOLLOW", "FADE", "PASS", "OVERRIDE"],
+        help="Trader decision for journal logging (FOLLOW, FADE, PASS, OVERRIDE)",
+    )
+    parser.add_argument(
+        "--rationale",
+        type=str,
+        default="",
+        help="Rationale or notes for discretionary override",
+    )
 
     args = parser.parse_args()
+
+    if args.freshness:
+        fc = DataFreshnessChecker()
+        rep = fc.check_freshness()
+        print("\n" + "=" * 80)
+        print("          GOLD AI ENGINE: DATA PIPELINE FRESHNESS & VINTAGE AUDIT")
+        print("=" * 80)
+        print(fc.format_freshness_table(rep))
+        print("=" * 80 + "\n")
+        return
+
+    if args.journal_history:
+        tj = TradeJournal()
+        df = tj.get_history()
+        print("\n" + "=" * 80)
+        print("          DISCRETIONARY TRADER DECISION JOURNAL: AUDIT LOG")
+        print("=" * 80)
+        if df.empty:
+            print("No decisions logged yet. Use --journal-log with --brief to log a trade.")
+        else:
+            print(df.to_string(index=False))
+        print("=" * 80 + "\n")
+        return
+
+    if args.journal_stats:
+        tj = TradeJournal()
+        stats = tj.compute_quality_stats()
+        print("\n" + "=" * 80)
+        print("          DECISION QUALITY: TRADER VS. MODEL AUDIT METRICS")
+        print("=" * 80)
+        print(json.dumps(stats, indent=2))
+        print("=" * 80 + "\n")
+        return
 
     engine = GoldWeeklyBiasEngine()
     engine.load_data()
@@ -96,28 +176,33 @@ def main():
     target_week = args.week if args.week else None
     prediction = engine.predict_week(week_ending=target_week)
 
-    # If recursive self-improvement is requested
+    # If recursive self-improvement, brief, or no-trade check is requested
     post_mortem_data = None
     recursive_data = None
+    matrix = engine.matrix
+    if target_week is None:
+        target_idx = len(matrix) - 1
+    else:
+        matches = matrix[matrix["week_ending"] == target_week]
+        target_idx = matches.index[0]
 
-    if args.recursive or args.post_mortem:
-        matrix = engine.matrix
-        if target_week is None:
-            target_idx = len(matrix) - 1
-        else:
-            matches = matrix[matrix["week_ending"] == target_week]
-            target_idx = matches.index[0]
+    prior_idx = max(0, target_idx - 1)
+    train_matrix = matrix.iloc[:prior_idx].copy()
+    prior_row = matrix.iloc[prior_idx]
+    current_row = matrix.iloc[target_idx]
 
-        # Prior week index
-        prior_idx = target_idx - 1
-        train_matrix = matrix.iloc[:prior_idx].copy()
-        prior_row = matrix.iloc[prior_idx]
-        current_row = matrix.iloc[target_idx]
+    curr_features = {
+        "delta_real_yield_1w": float(current_row.get("delta_real_yield_1w", 0.0)),
+        "dxy_return_1w": float(current_row.get("dxy_return_1w", 0.0)),
+        "delta_breakeven_1w": float(current_row.get("delta_breakeven_1w", 0.0)),
+        "gold_distance_20w": float(current_row.get("gold_distance_20w", 0.0)),
+        "vix": float(current_row.get("vix", 15.0)),
+    }
 
+    if args.recursive or args.post_mortem or args.brief or args.no_trade_check:
         rec_engine = RecursiveSelfImprovingEngine()
         rec_engine.initialize(train_matrix)
 
-        # Baseline predictions for prior week
         prior_features = {
             "delta_real_yield_1w": float(prior_row.get("delta_real_yield_1w", 0.0)),
             "dxy_return_1w": float(prior_row.get("dxy_return_1w", 0.0)),
@@ -126,7 +211,6 @@ def main():
             "vix": float(prior_row.get("vix", 15.0)),
         }
 
-        # Warm up last_prediction with baseline
         prior_price = float(prior_row["gold_close"])
         rec_engine.predict_upcoming_week(
             week=str(prior_row["week_ending"]),
@@ -136,7 +220,6 @@ def main():
             baseline_corridor_low=prior_price * 0.975,
         )
 
-        # Evaluate outcome of prior week
         realized_prior_ret = float(current_row["gold_close"] / prior_row["gold_close"] - 1.0)
         post_mortem_data = rec_engine.process_prior_week_outcome(
             week=str(prior_row["week_ending"]),
@@ -145,14 +228,6 @@ def main():
             actual_price=float(current_row["gold_close"]),
         )
 
-        # Generate recursive prediction for current target week
-        curr_features = {
-            "delta_real_yield_1w": float(current_row.get("delta_real_yield_1w", 0.0)),
-            "dxy_return_1w": float(current_row.get("dxy_return_1w", 0.0)),
-            "delta_breakeven_1w": float(current_row.get("delta_breakeven_1w", 0.0)),
-            "gold_distance_20w": float(current_row.get("gold_distance_20w", 0.0)),
-            "vix": float(current_row.get("vix", 15.0)),
-        }
         recursive_data = rec_engine.predict_upcoming_week(
             week=str(current_row["week_ending"]),
             current_features_dict=curr_features,
@@ -165,6 +240,65 @@ def main():
             "prior_week_post_mortem": post_mortem_data,
             "adaptive_forecast": recursive_data,
         }
+
+    # Handle --no-trade-check
+    if args.no_trade_check:
+        nt_filter = NoTradeFilter()
+        fail_summary = {
+            "failure_similarity_score": recursive_data.get("failure_similarity_score", 0.0) if recursive_data else 0.0,
+            "reflexive_warning_active": recursive_data.get("reflexive_warning_active", False) if recursive_data else False,
+            "matching_failure_archetype": recursive_data.get("matching_failure_archetype", "NONE") if recursive_data else "NONE",
+        }
+        bias_to_check = recursive_data["recursive_bias_score"] if recursive_data else prediction["ai_weekly_bias"]["bias_score"]
+        eval_res = nt_filter.evaluate(
+            bias_score=bias_to_check,
+            features_dict=curr_features,
+            failure_memory_data=fail_summary,
+            freshness_data=DataFreshnessChecker().check_freshness(),
+        )
+        print("\n" + "=" * 80)
+        print("          GOLD AI ENGINE: DO-NOT-TRADE CIRCUIT BREAKER STATUS")
+        print("=" * 80)
+        print(f"Status              : {eval_res['status_label']}")
+        print(f"Action Guidance     : {eval_res['action_guidance']}")
+        print(f"Active Triggers     : {eval_res['trigger_count']}")
+        for t in eval_res["triggers"]:
+            print(f"  - [{t['severity']}] {t['code']}: {t['reason']}")
+        print("=" * 80 + "\n")
+        return
+
+    # Handle --brief
+    if args.brief:
+        brief_gen = WeeklyDecisionBrief()
+        brief_dict = brief_gen.generate_brief(
+            prediction=prediction,
+            recursive_data=recursive_data,
+            features_dict=curr_features,
+        )
+        if args.journal_log:
+            tj = TradeJournal()
+            cal = brief_dict["confidence_calibration"]
+            nt = brief_dict["no_trade_circuit_breaker"]
+            entry = tj.log_decision(
+                week_ending=str(brief_dict["observation_week"]),
+                gold_price=brief_dict["current_gold_price"],
+                model_bias_score=brief_dict["bias_score"],
+                confidence_tier=cal["tier"],
+                no_trade_triggered=nt["is_no_trade"],
+                trader_decision=args.decision,
+                override_rationale=args.rationale,
+                planned_entry=brief_dict["current_gold_price"],
+                planned_stop=brief_dict["invalidation"]["level"],
+                planned_target=brief_dict["expected_corridor"]["expected_center"],
+                no_trade_triggers=[t["code"] for t in nt["triggers"]],
+            )
+            print(f"\n[JOURNAL LOGGED]: Entry {entry['entry_id']} recorded to data/journal/trade_journal.csv")
+
+        if args.json:
+            print(json.dumps(brief_dict, indent=2))
+        else:
+            print(brief_gen.render_markdown(brief_dict))
+        return
 
     if args.json:
         print(json.dumps(prediction, indent=2))

@@ -15,6 +15,12 @@ from src.ai_engine.recursive_learner import (
     RecursiveSelfImprovingEngine,
 )
 
+from src.ai_engine.data_freshness import DataFreshnessChecker
+from src.ai_engine.confidence_calibrator import ConfidenceCalibrator
+from src.ai_engine.no_trade_filter import NoTradeFilter
+from src.ai_engine.trade_journal import TradeJournal
+from src.ai_engine.decision_brief import WeeklyDecisionBrief
+
 __all__ = [
     "MacroBiasEstimator",
     "WeeklyRangePredictor",
@@ -26,4 +32,9 @@ __all__ = [
     "FailureMemoryBank",
     "RecursiveKalmanEstimator",
     "RecursiveSelfImprovingEngine",
+    "DataFreshnessChecker",
+    "ConfidenceCalibrator",
+    "NoTradeFilter",
+    "TradeJournal",
+    "WeeklyDecisionBrief",
 ]

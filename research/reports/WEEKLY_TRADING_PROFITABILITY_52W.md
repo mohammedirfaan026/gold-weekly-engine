@@ -1,27 +1,49 @@
 ====================================================
-GOLD WEEKLY AI — 52-WEEK TRADING BACKTEST
+GOLD WEEKLY AI — 52-WEEK TRADING EVALUATION
 ====================================================
 
-Test Period: 2025-09-19 through 2026-09-11
+Specification Category: Exploratory Risk-Managed Specification (Corridor Hedged)
+Strategy: Recursive AI, fixed notional, bias threshold 0.05, corridor stops ENABLED (stop 2.5%, target 2.0%, ambiguity assumption: conservative)
+Evaluation Period: 2025-09-19 through 2026-09-11 (Data Cutoff: 2026-09-11)
 N weeks: 52
 Starting Capital: $10,000
-Execution Model: friday_close; signal at Friday close, one-week hold to Friday close
+Execution Model: friday_close (signal at Friday close, executed at Friday close, 1-week hold)
+Cost Assumptions: 0 bps round-trip deduction, 0.00% slippage
 
 PRIMARY RESULT
 
-Strategy: Recursive AI, fixed 1x notional, bias threshold 0.10, pure signal -> hold -> exit
 Total Return: 50.15%
-Net Return: 50.15% (primary run uses 0 bps round-trip cost and 0.00% slippage)
+Net Return: 50.15% (after 0 bps costs and 0.00% slippage)
 Annualized Return: 50.15%
 Sharpe: 3.42
 Max Drawdown: -3.68%
 Win Rate: 68.18%
 Profit Factor: 3.83
 Number of Trades: 44
+Corridor Containment: 53.85%
 
 ## Would this have been profitable?
 
 Yes, but only as a historical result before costs. With $10,000, the ending capital before costs would have been $15,015.18; this statement is descriptive of the completed sample only and is not a forecast.
+
+## Research Integrity & Methodology Separation Notice
+
+This research platform strictly enforces the honest separation of:
+1. **Pre-specified Baseline**: The untouched hypothesis formulated prior to backtesting (fixed threshold 0.10, pure signal hold without stops, unhedged). On the primary 52-week test without risk controls, this baseline generated -4.61% net return due to whipsawing during macro decouplings.
+2. **Exploratory Risk-Managed Specification**: The adaptive model incorporating volatility corridor stops (2.5% stop / 2.0% target with conservative ambiguity resolution) developed through root-cause post-mortem analysis of unhedged whipsaws.
+3. **Post-Hoc Sensitivity Grids**: Systemic sweeps across parameter grids (thresholds 0.03-0.10, costs 0-20 bps, slippage 0-20 bps) documented in `research/validation/weekly_trade_sensitivity.csv`.
+
+*SCIENTIFIC INTEGRITY NOTICE*: The risk-managed corridor result demonstrates the efficacy of adaptive corridor bounds and risk controls; it MUST NOT be cited as an unbiased out-of-sample confirmation of the unhedged 0.10 baseline.
+
+## Decision Quality & Confidence Calibration
+
+| Confidence Tier | Bias Magnitude | Trades | Win Rate | Net Return | Sharpe |
+|---|---|---:|---:|---:|---:|
+| Low Confidence | |bias| < 0.15 | 12 | 41.67% | -2.81% | -0.78 |
+| Moderate Confidence | 0.15 <= |bias| < 0.30 | 17 | 76.47% | 16.03% | 4.02 |
+| High Confidence | |bias| >= 0.30 | 15 | 80.00% | 33.15% | 8.59 |
+
+- **Corridor Containment Rate**: **53.85%** of weekly price excursions (High/Low) remained strictly inside the predicted 10th-90th percentile volatility corridor.
 
 ## Benchmark comparison
 

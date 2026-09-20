@@ -1,0 +1,2 @@
+entry_id,created_at,week_ending,gold_price,model_bias_score,confidence_tier,no_trade_triggered,no_trade_triggers,trader_decision,override_rationale,planned_entry,planned_stop,planned_target,actual_entry_price,actual_exit_price,realized_pnl_pct,outcome_status,lessons_learned
+JRN-20260918-3634,2026-09-20 14:13:54 UTC,2026-09-18,6256.05,-0.031,LOW,True,SUB_THRESHOLD_EDGE; MACRO_DIVERGENCE_CONFLICT,PASS,Macro divergence between yields and DXY; sub-threshold edge,6256.05,6256.05,6247.49,,,,SKIPPED,
