@@ -50,15 +50,25 @@ class LeakageProofFeatureBuilder:
         matrix = pd.DataFrame()
 
         # --- A. METADATA & TIMESTAMPS ---
+        import pytz
+        ny_tz = pytz.timezone("America/New_York")
+        utc_tz = pytz.UTC
+
         matrix["week_ending"] = df_weekly["week_ending"]
         
-        week_ends_dt = [to_utc_time(pd.Timestamp(w) + pd.Timedelta(hours=17)) for w in df_weekly["week_ending"]]
-        week_starts_dt = [to_utc_time(pd.Timestamp(w) - pd.Timedelta(days=5, hours=6)) for w in df_weekly["week_ending"]]
+        # Rigorous America/New_York session timing
+        def to_ny_to_utc(date_str: str, hour: int, minute: int, second: int = 0) -> pd.Timestamp:
+            naive = pd.Timestamp(date_str).replace(hour=hour, minute=minute, second=second, microsecond=0)
+            return ny_tz.localize(naive).astimezone(utc_tz)
 
-        matrix["week_start"] = week_starts_dt
-        matrix["week_end"] = week_ends_dt
-        matrix["prediction_timestamp"] = week_ends_dt  # Friday 17:00 ET
-        matrix["data_timestamp"] = [to_utc_time(pd.Timestamp(w) + pd.Timedelta(hours=16, minutes=59)) for w in df_weekly["week_ending"]]
+        week_ends_utc = [to_ny_to_utc(w, 17, 0, 0) for w in df_weekly["week_ending"]]
+        week_starts_utc = [to_ny_to_utc(str((pd.Timestamp(w) - pd.Timedelta(days=5)).date()), 18, 0, 0) for w in df_weekly["week_ending"]]
+        data_ts_utc = [to_ny_to_utc(w, 16, 59, 59) for w in df_weekly["week_ending"]]
+
+        matrix["week_start"] = week_starts_utc
+        matrix["week_end"] = week_ends_utc
+        matrix["prediction_timestamp"] = week_ends_utc  # Friday 17:00 New York time in UTC
+        matrix["data_timestamp"] = data_ts_utc          # Friday 16:59:59 New York time in UTC
         matrix["feature_available_timestamp"] = matrix["prediction_timestamp"]
         matrix["feature_lag_hours"] = 0.0
         matrix["data_source"] = "COMEX_FRED_CFTC_PIT"

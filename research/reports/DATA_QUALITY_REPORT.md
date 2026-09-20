@@ -1,5 +1,5 @@
 # Data Quality & Lineage Audit Report
-**Generated:** 2026-09-20 10:47:50 UTC
+**Generated:** 2026-09-20 10:54:40 UTC
 **Sample Window:** 2010-01-01 to 2026-09-18 (873 completed trading weeks)
 
 ## Executive Summary

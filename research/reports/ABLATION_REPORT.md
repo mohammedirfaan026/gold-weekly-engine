@@ -1,5 +1,5 @@
 # Sequential Information Layer Feature Ablation Report
-**Generated:** 2026-09-20 10:47:57 UTC
+**Generated:** 2026-09-20 10:54:46 UTC
 
 ## Overview
 To determine whether adding macroeconomic, positioning, regime, and interaction variables provides genuine incremental predictive signal or merely introduces estimation noise and overfitting, we evaluate the cumulative feature layers A through G out-of-sample:

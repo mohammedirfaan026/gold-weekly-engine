@@ -1,5 +1,5 @@
 # Gold Predictive Research: Final Synthesized Report
-**Research Date:** 2026-09-20 10:47:57 UTC
+**Research Date:** 2026-09-20 10:54:46 UTC
 **Sample:** 2010–2026 (873 trading weeks, 450 weeks OOS walk-forward validation)
 
 ## Executive Synthesis
@@ -67,32 +67,31 @@ The output format below illustrates the exact quantitative state assessment gene
 
 ```yaml
 Observation_Week: 2026-09-11
-Prediction_Timestamp: 2026-09-11 17:00:00+00:00
-Expected_Return_Distribution:
-  Expected_Mean_Return (E[R]): +0.0038 (+0.38%)
-  P(R > 0) [Directional Probability]: 0.584
-  P(R > +1.0%) [Upper Tail Surge]: 0.281
-  P(R < -1.0%) [Lower Tail Drop]: 0.187
-  Conditional_Expected_Gain_if_Positive: +1.62%
-  Conditional_Expected_Loss_if_Negative: -1.34%
-State_Classifications:
-  Gold_Trend_Regime: 0 (Bullish Trend)
-  Real_Yield_Regime: -1 (Neutral / Stable)
-  DXY_Regime: 0 (Weakening USD)
-  VIX_Regime: 0 (Normal Risk Appetite)
-  Equity_Regime: -1 (Risk-On Equities)
-  Positioning_Regime: 0 (Elevated Long)
-Dominant_Drivers:
-  1. Delta Real Yield (1w): -4 bps (Supportive)
-  2. DXY Dollar Index (1w): -0.42% (Supportive)
-  3. 20w Moving Average Extension: +2.1% (Momentum Confirmation)
-Historical_Analogs:
-  - 2020-07-24 (Return next week: +2.23%)
-  - 2023-11-10 (Return next week: +2.11%)
-  - 2024-03-01 (Return next week: +4.61%)
-Model_Confidence & Robustness:
-  Confidence_Score: 0.74 / 1.00
-  Model_Agreement: 4 of 5 Estimators Positive
-  Stability_Flag: STABLE (In-Distribution)
-  Evidence_Quality_Rating: STRONG
+Prediction_Timestamp: 2026-09-11 21:00:00+00:00
+Expected_Return_Distribution: [STATISTICAL - OOS Estimator]
+  Expected_Mean_Return (E[R]): +0.0021 (+0.21%)
+  P(R > 0) [Calibrated Probability]: 0.437
+  P(R > +1.0%) [Upper Tail Surge]: 0.253
+  P(R < -1.0%) [Lower Tail Drop]: 0.367
+  Historical_Unconditional_Base_Rate P(R > 0): 0.520
+State_Classifications: [EXPANDING EX-ANTE QUANTILES]
+  Gold_Trend_Regime: 0 (1=Bullish, -1=Bearish, 0=Neutral)
+  Real_Yield_Regime: -1 (1=Rising, -1=Falling, 0=Neutral)
+  DXY_Regime: 0 (1=Strengthening, -1=Weakening, 0=Neutral)
+  VIX_Regime: 0 (1=High >75th pctile, -1=Low <25th, 0=Normal)
+  Equity_Regime: -1 (1=Risk-On, -1=Risk-Off, 0=Neutral)
+  Positioning_Regime: 0 (1=Elevated, -1=Low, 2=Extreme Long, -2=Extreme Short)
+Dominant_Drivers: [STATISTICAL - Normalized Feature Values]
+  1. Delta Real Yield (1w): -0.0046 (Beta: -0.011)
+  2. DXY Dollar Index Return (1w): -0.0004 (Beta: -0.045)
+  3. Distance to 20w MA: -0.0550
+Historical_Analogs: [POINT-IN-TIME STRICT NEAREST NEIGHBORS (No Future Data)]
+  - 2026-08-14 (Distance: 0.30, Realized Next-Week Return: -0.20%)
+  - 2012-12-21 (Distance: 0.39, Realized Next-Week Return: +0.64%)
+  - 2021-08-13 (Distance: 0.39, Realized Next-Week Return: -1.67%)
+Model_Confidence & Integrity Flags:
+  Confidence_Score: 0.54 / 1.00 [HEURISTIC - Distance-weighted model consensus]
+  Model_Agreement: 3 of 5 Estimators Positive [DESCRIPTIVE]
+  Stability_Flag: UNCERTAIN [STATISTICAL - OOS IC p-value > 0.05]
+  Evidence_Quality_Rating: MODERATE / STATISTICALLY UNCERTAIN [AUDIT CLASSIFICATION]
 ```

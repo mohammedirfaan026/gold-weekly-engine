@@ -60,3 +60,31 @@ def test_is_market_open():
     assert is_market_open(NY_TZ.localize(pd.Timestamp("2024-01-13 12:00:00"))) is False
     # Daily halt: Tuesday 17:30 ET -> Closed
     assert is_market_open(NY_TZ.localize(pd.Timestamp("2024-01-16 17:30:00"))) is False
+
+
+def test_winter_summer_dst_transitions():
+    """Verifies that 17:00 America/New_York correctly maps to 22:00 UTC in winter (EST) and 21:00 UTC in summer (EDT)."""
+    # 1. Winter Friday (EST = UTC-5)
+    winter_date = "2026-01-16"
+    winter_close_ny = NY_TZ.localize(pd.Timestamp(f"{winter_date} 17:00:00"))
+    winter_close_utc = winter_close_ny.astimezone(pytz.UTC)
+    assert winter_close_utc.hour == 22, f"Winter close should be 22:00 UTC, got {winter_close_utc.hour}:00"
+
+    # 2. Summer Friday (EDT = UTC-4)
+    summer_date = "2026-07-17"
+    summer_close_ny = NY_TZ.localize(pd.Timestamp(f"{summer_date} 17:00:00"))
+    summer_close_utc = summer_close_ny.astimezone(pytz.UTC)
+    assert summer_close_utc.hour == 21, f"Summer close should be 21:00 UTC, got {summer_close_utc.hour}:00"
+
+    # 3. DST Spring Forward (March 2026 transition: March 8)
+    pre_dst_fri = NY_TZ.localize(pd.Timestamp("2026-03-06 17:00:00")).astimezone(pytz.UTC)
+    post_dst_fri = NY_TZ.localize(pd.Timestamp("2026-03-13 17:00:00")).astimezone(pytz.UTC)
+    assert pre_dst_fri.hour == 22, "Pre-DST March Friday close must be 22:00 UTC"
+    assert post_dst_fri.hour == 21, "Post-DST March Friday close must be 21:00 UTC"
+
+    # 4. DST Fall Back (November 2026 transition: November 1)
+    pre_fall_fri = NY_TZ.localize(pd.Timestamp("2026-10-30 17:00:00")).astimezone(pytz.UTC)
+    post_fall_fri = NY_TZ.localize(pd.Timestamp("2026-11-06 17:00:00")).astimezone(pytz.UTC)
+    assert pre_fall_fri.hour == 21, "Pre-fall-back October Friday close must be 21:00 UTC"
+    assert post_fall_fri.hour == 22, "Post-fall-back November Friday close must be 22:00 UTC"
+

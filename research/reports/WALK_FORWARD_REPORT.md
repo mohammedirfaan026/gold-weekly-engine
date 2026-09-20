@@ -1,5 +1,5 @@
 # Purged Walk-Forward Predictive Performance Report
-**Generated:** 2026-09-20 10:47:57 UTC
+**Generated:** 2026-09-20 10:54:46 UTC
 **Out-of-Sample Testing Window:** 2018 to 2026 (454 weeks across 8 expanding folds)
 
 ## Executive Summary
