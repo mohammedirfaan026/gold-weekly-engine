@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}News · Gold Weekly{% endblock %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Live wire</p>
+  <h1>News desk</h1>
+  <p class="lede">{{ intel.get('narrative_summary') or 'No narrative yet.' }}</p>
+  <p class="flags">{% for f in intel.get('risk_flags', []) %}<span>{{ f }}</span>{% endfor %}</p>
+</section>
+
+<section class="panel">
+  <h2>Feed health</h2>
+  <ul class="factor-list">
+    {% for name, status in (intel.get('source_status') or meta.get('source_status') or {}).items() %}
+    <li><span>{{ name }}</span><em>{{ status }}</em></li>
+    {% else %}
+    <li><span>feeds</span><em>not loaded</em></li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Headlines</h2>
+  <ul class="headlines dense">
+    {% for r in rows %}
+    <li>
+      <span class="tag">{{ r.get('category', 'news') }}</span>
+      {% if r.get('url') %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.get('title') }}</a>{% else %}{{ r.get('title') }}{% endif %}
+      <small>{{ r.get('source') }} · {{ r.get('tone', '') }} · {{ r.get('published_utc', '') }}</small>
+    </li>
+    {% else %}
+    <li>No news cached.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

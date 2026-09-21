@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Brief · Gold Weekly{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Week {{ view.week }} · {{ view.generated }}</p>
+    <h1 class="brand-hero">GOLD<span>WEEKLY</span></h1>
+    <p class="stance">{{ view.stance }}</p>
+    <p class="lede">Spot ${{ '%.2f'|format(view.price or 0) }} · Bias {{ '%+.3f'|format(view.bias or 0) }} · Exp {{ '%+.2f'|format(view.expected_return or 0) }}%</p>
+    <div class="cta-row">
+      <a class="cta" href="{{ url_for('news') }}">Scan news wire</a>
+      <a class="cta ghost" href="{{ url_for('brief_text') }}">Open raw brief</a>
+    </div>
+  </div>
+  <div class="hero-meter" aria-hidden="true">
+    <div class="meter-label">Corridor</div>
+    <div class="meter-track">
+      <span class="lo">${{ '%.0f'|format(view.corridor_low or 0) }}</span>
+      <span class="mid">${{ '%.0f'|format(view.corridor_mid or 0) }}</span>
+      <span class="hi">${{ '%.0f'|format(view.corridor_high or 0) }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="strip">
+  <div>
+    <span class="k">Confidence</span>
+    <strong>{{ view.tier or '—' }}</strong>
+  </div>
+  <div>
+    <span class="k">Breaker</span>
+    <strong>{{ view.breaker or '—' }}</strong>
+  </div>
+  <div>
+    <span class="k">Size</span>
+    <strong>{{ view.size_label or '—' }}</strong>
+  </div>
+  <div>
+    <span class="k">Emp. win</span>
+    <strong>{{ view.win_rate or '—' }}{% if view.win_rate %}%{% endif %}</strong>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Desk guidance</h2>
+  <p>{{ view.action or 'No guidance.' }}</p>
+  <p class="muted">{{ view.size_rationale }}</p>
+  <p class="muted">{{ view.invalidation }}</p>
+</section>
+
+<section class="panel">
+  <h2>Macro factors</h2>
+  <ul class="factor-list">
+    {% set ry = view.factors.get('real_yield_10y', {}) %}
+    {% set dx = view.factors.get('us_dollar_dxy', {}) %}
+    {% set vx = view.factors.get('market_risk_vix', {}) %}
+    {% set gt = view.factors.get('gold_trend', {}) %}
+    <li><span>Real yield</span><em>{{ ry.get('state', '—') }} ({{ ry.get('weekly_delta_bps', 0) }} bps)</em></li>
+    <li><span>DXY</span><em>{{ dx.get('state', '—') }} ({{ dx.get('weekly_return_pct', 0) }}%)</em></li>
+    <li><span>VIX</span><em>{{ vx.get('state', '—') }} ({{ vx.get('vix_level', '—') }})</em></li>
+    <li><span>Trend</span><em>{{ gt.get('state', '—') }} ({{ gt.get('distance_20w_pct', 0) }}%)</em></li>
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>News flags</h2>
+  <p class="flags">{% for f in view.news_flags %}<span>{{ f }}</span>{% else %}<span>NONE</span>{% endfor %}</p>
+  <p class="muted">{{ view.narrative }}</p>
+  <ul class="headlines">
+    {% for h in view.headlines %}
+    <li>
+      <span class="tag">{{ h.category }}</span>
+      {{ h.title }}
+      <small>{{ h.source }}</small>
+    </li>
+    {% else %}
+    <li>No headlines cached. Run <code>python run_weekly_live.py</code>.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if run %}
+<section class="panel faint">
+  <h2>Last pipeline run</h2>
+  <p class="mono">ok={{ run.get('ok') }} · {{ run.get('finished_at_utc') or run.get('started_at_utc') }}</p>
+  {% if run.get('error') %}<p class="error">{{ run.error }}</p>{% endif %}
+</section>
+{% endif %}
+
+<p class="footnote">Decision support only. No order routing. You confirm FOLLOW / FADE / PASS.</p>
+{% endblock %}

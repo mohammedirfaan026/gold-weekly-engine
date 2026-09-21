@@ -140,8 +140,39 @@ def main():
         action="store_true",
         help="Disable strict point-in-time and data freshness fail-closed exceptions (warning only)",
     )
+    parser.add_argument(
+        "--news",
+        action="store_true",
+        help="Fetch live news only and print gold/macro intelligence (no full brief)",
+    )
+    parser.add_argument(
+        "--no-news",
+        action="store_true",
+        help="Skip auto news fetch when generating --brief (model/macro only)",
+    )
 
     args = parser.parse_args()
+
+    if args.news:
+        from src.ingestion.news_feed import NewsFeedIngestor
+        intel = NewsFeedIngestor().build_intelligence(force_refresh=True)
+        print("\n" + "=" * 80)
+        print("          GOLD AI ENGINE: LIVE NEWS / GEOPOLITICS / FED FEED")
+        print("=" * 80)
+        print(f"Fetched at UTC       : {intel.get('fetched_at_utc')}")
+        print(f"Headlines            : {intel.get('item_count')}")
+        print(f"Risk flags           : {', '.join(intel.get('risk_flags') or [])}")
+        size = intel.get("suggested_position_size") or {}
+        print(f"Suggested size       : {size.get('label')} -- {size.get('rationale')}")
+        print(f"Narrative            : {intel.get('narrative_summary')}")
+        print("Top headlines:")
+        for h in (intel.get("top_headlines") or [])[:12]:
+            print(f"  - [{h.get('category')}|{h.get('tone')}] {h.get('title')} ({h.get('source')})")
+        print("Feed health:")
+        for name, status in (intel.get("source_status") or {}).items():
+            print(f"  - {name}: {status}")
+        print("=" * 80 + "\n")
+        return
 
     if args.shadow_report:
         sl = ShadowLogger()
@@ -329,6 +360,7 @@ def main():
             freshness_report=fresh_rep,
             pit_validation_report=pit_rep,
             save_file=args.brief,
+            fetch_news=not args.no_news,
         )
 
     if args.shadow_save and brief_dict:

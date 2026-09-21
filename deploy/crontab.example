@@ -1,0 +1,8 @@
+# Gold Weekly — Friday live pipeline (UTC)
+# Edit paths before installing: crontab deploy/crontab.example
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Friday 21:30 UTC — after typical US equity close
+30 21 * * 5 cd /opt/gold && /opt/gold/.venv/bin/python run_weekly_live.py >> /opt/gold/logs/weekly_live.log 2>&1

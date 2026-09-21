@@ -4,6 +4,7 @@ from src.ingestion.macro_data import MacroDataIngestor
 from src.ingestion.cot_data import CotDataIngestor
 from src.ingestion.etf_data import EtfDataIngestor
 from src.ingestion.event_loader import EventLoader
+from src.ingestion.news_feed import NewsFeedIngestor
 
 __all__ = [
     "MarketDataIngestor",
@@ -11,4 +12,5 @@ __all__ = [
     "CotDataIngestor",
     "EtfDataIngestor",
     "EventLoader",
+    "NewsFeedIngestor",
 ]

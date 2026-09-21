@@ -40,3 +40,13 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Secrets
+.env
+.env.local
+*.pem
+
+# Runtime
+logs/
+data/live/
+data/news/

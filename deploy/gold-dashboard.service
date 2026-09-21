@@ -1,0 +1,15 @@
+[Unit]
+Description=Gold Weekly private dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/gold
+EnvironmentFile=/opt/gold/.env
+ExecStart=/opt/gold/.venv/bin/python -m web.app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

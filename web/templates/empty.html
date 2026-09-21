@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Waiting · Gold Weekly{% endblock %}
+{% block content %}
+<section class="hero compact">
+  <p class="eyebrow">No brief yet</p>
+  <h1 class="brand-hero">GOLD<span>WEEKLY</span></h1>
+  <p class="lede">Run the live pipeline once to populate this desk.</p>
+  <pre class="mono block">python run_weekly_live.py</pre>
+  {% if run %}
+  <p class="muted">Last run: ok={{ run.get('ok') }} · {{ run.get('error') or run.get('finished_at_utc') }}</p>
+  {% endif %}
+</section>
+{% endblock %}

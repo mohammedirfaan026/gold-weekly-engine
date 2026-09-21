@@ -162,7 +162,7 @@ def test_decision_brief_taxonomy_and_content():
         "gold_distance_20w": 0.03,
     }
 
-    brief = brief_gen.generate_brief(prediction=prediction, features_dict=features)
+    brief = brief_gen.generate_brief(prediction=prediction, features_dict=features, fetch_news=False)
     assert "taxonomy_stance" in brief
     assert "Bullish bias -- confirmation required" in brief["taxonomy_stance"]
 
@@ -175,6 +175,8 @@ def test_decision_brief_taxonomy_and_content():
     assert "PRICE VOLATILITY CORRIDOR" in rendered
     assert "SCENARIO MAP" in rendered
     assert "DATA FRESHNESS" in rendered
+    assert "LIVE NEWS" in rendered
+    assert "AUTO-FETCHED" in rendered
 
 
 def test_backtest_execution_models():

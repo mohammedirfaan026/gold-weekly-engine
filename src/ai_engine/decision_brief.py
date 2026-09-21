@@ -19,6 +19,7 @@ from .no_trade_filter import NoTradeFilter
 from .data_freshness import DataFreshnessChecker
 from .pit_validator import PointInTimeFeatureValidator
 from .versioning import get_system_version_info
+from src.ingestion.news_feed import NewsFeedIngestor
 
 
 DEFAULT_REPORT_PATH = Path("research/reports/LIVE_WEEKLY_DECISION_BRIEF.md")
@@ -43,10 +44,12 @@ class WeeklyDecisionBrief:
         config: Optional[Dict[str, Any]] = None,
         save_file: bool = True,
         output_path: Optional[Path | str] = None,
+        fetch_news: bool = True,
+        news_intelligence: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Synthesizes model predictions, recursive state, provenance, and safety filters
-        into a structured institutional weekly decision briefing.
+        Synthesizes model predictions, recursive state, provenance, safety filters,
+        and auto-fetched live news into a structured weekly decision briefing.
         """
         f_dict = features_dict or {}
         price = float(prediction.get("current_gold_price", 0.0))
@@ -237,14 +240,17 @@ class WeeklyDecisionBrief:
                 "pit_validation": pit_validation_report or {"is_valid": True, "violation_count": 0},
             },
             "human_decision_worksheet": {
-                "instruction": "Fill out manually before execution. The engine will never execute orders automatically.",
+                "instruction": (
+                    "News and suggested size are auto-filled. "
+                    "You still confirm FOLLOW/FADE/PASS before execution -- no auto-routing."
+                ),
                 "fields": {
                     "trader_decision": "[  ] FOLLOW   [  ] FADE   [  ] PASS   [  ] OVERRIDE",
                     "override_rationale": "________________________________________________",
                     "planned_entry_price": f"${price:,.2f}",
                     "planned_stop_loss": f"${invalidation_level:,.2f}",
                     "planned_take_profit": f"${corridor_high if direction == 'BULLISH' else corridor_low:,.2f}",
-                    "position_size_decision": "Fixed 1.0x / Reduced Risk / Standing Aside",
+                    "position_size_decision": "AUTO_PENDING",
                     "decision_timestamp_utc": "____________________",
                     "actual_entry_price": "____________________",
                     "actual_exit_price": "____________________",
@@ -253,6 +259,55 @@ class WeeklyDecisionBrief:
                 },
             },
         }
+
+        # Auto-fetch live news / geopolitics / Fed speak (no manual paste required)
+        if news_intelligence is None and fetch_news:
+            try:
+                news_intelligence = NewsFeedIngestor().build_intelligence(
+                    force_refresh=True,
+                    confidence_tier=str(calibration.get("tier", "MODERATE")),
+                    no_trade=bool(no_trade_eval.get("is_no_trade", False)),
+                )
+            except Exception as exc:
+                news_intelligence = {
+                    "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "item_count": 0,
+                    "source_status": {"news_feed": f"ERROR:{type(exc).__name__}"},
+                    "risk_flags": ["NEWS_FEED_UNAVAILABLE"],
+                    "suggested_position_size": {
+                        "label": "REDUCED RISK (0.5x)",
+                        "multiplier": 0.5,
+                        "rationale": f"News feed failed ({type(exc).__name__}); default to reduced size.",
+                    },
+                    "narrative_summary": "Live news feed unavailable this run.",
+                    "top_headlines": [],
+                    "by_category": {},
+                    "manual_input_required": False,
+                    "note": "News fetch failed; brief continues with model-only inputs.",
+                }
+        elif news_intelligence is None:
+            news_intelligence = {
+                "fetched_at_utc": "",
+                "item_count": 0,
+                "source_status": {},
+                "risk_flags": ["NEWS_FETCH_DISABLED"],
+                "suggested_position_size": {
+                    "label": "STANDARD (1.0x)",
+                    "multiplier": 1.0,
+                    "rationale": "News fetch disabled by caller.",
+                },
+                "narrative_summary": "News fetch disabled.",
+                "top_headlines": [],
+                "by_category": {},
+                "manual_input_required": False,
+                "note": "fetch_news=False",
+            }
+
+        brief_dict["live_news_intelligence"] = news_intelligence
+        size_label = news_intelligence.get("suggested_position_size", {}).get("label", "STANDARD (1.0x)")
+        brief_dict["human_decision_worksheet"]["fields"]["position_size_decision"] = (
+            f"AUTO-SUGGESTED: {size_label}"
+        )
 
         # Convenience top-level accessors
         brief_dict["observation_week"] = brief_dict["identification"]["observation_week"]
@@ -290,6 +345,9 @@ class WeeklyDecisionBrief:
         fresh = risk["data_freshness"]
         pit = risk.get("pit_validation", {})
         worksheet = brief["human_decision_worksheet"]["fields"]
+        news = brief.get("live_news_intelligence") or {}
+        size_info = news.get("suggested_position_size") or {}
+        headlines = news.get("top_headlines") or []
 
         lines = [
             "================================================================================",
@@ -377,7 +435,36 @@ class WeeklyDecisionBrief:
             f"  Data Pipeline Health  : {pipeline_health}",
             "",
             "--------------------------------------------------------------------------------",
-            "F. HUMAN DISCRETIONARY DECISION WORKSHEET",
+            "F. LIVE NEWS / GEOPOLITICS / CENTRAL-BANK FEED (AUTO-FETCHED)",
+            "--------------------------------------------------------------------------------",
+            f"  Fetch Timestamp UTC   : {news.get('fetched_at_utc', 'N/A')}",
+            f"  Headlines Captured    : {news.get('item_count', 0)}",
+            f"  Risk Flags            : {', '.join(news.get('risk_flags') or ['NONE'])}",
+            f"  Suggested Size        : {size_info.get('label', 'N/A')} -- {size_info.get('rationale', '')}",
+            f"  Narrative Summary     : {news.get('narrative_summary', 'N/A')}",
+            "  Top Headlines         :",
+        ])
+
+        if headlines:
+            for h in headlines[:8]:
+                pub = (h.get("published_utc") or "")[:16]
+                lines.append(
+                    f"    - [{h.get('category', 'news')}|{h.get('tone', 'neutral')}|{pub}] "
+                    f"{h.get('title', '')} ({h.get('source', '')})"
+                )
+        else:
+            lines.append("    - No relevant headlines returned this run.")
+
+        src_status = news.get("source_status") or {}
+        if src_status:
+            lines.append("  Feed Health            :")
+            for name, status in list(src_status.items())[:8]:
+                lines.append(f"    - {name}: {status}")
+
+        lines.extend([
+            "",
+            "--------------------------------------------------------------------------------",
+            "G. HUMAN DISCRETIONARY DECISION WORKSHEET",
             "--------------------------------------------------------------------------------",
             "  * Trader Decision     : " + worksheet["trader_decision"],
             "  * Override Rationale  : " + worksheet["override_rationale"],
@@ -394,6 +481,7 @@ class WeeklyDecisionBrief:
             "================================================================================",
             "LEGAL & SCIENTIFIC DISCLAIMER:",
             "- For institutional research and discretionary decision-support only.",
+            "- News headlines are auto-fetched from public feeds; verify critical items before risking capital.",
             "- NEVER execute trades solely on algorithmic outputs. Discretionary verification required.",
             "- AUTONOMOUS TRADING NOT SUPPORTED. No automatic order routing capability exists.",
             "- Historical backtests reflect past exploratory evaluations and are NOT future forecasts.",
