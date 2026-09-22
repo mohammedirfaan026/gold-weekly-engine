@@ -112,7 +112,7 @@ class WeeklyDatasetBuilder:
         events_aggregated = WeeklyEventAggregator.aggregate_all_weeks(events_df, week_endings)
         master = pd.merge(master, events_aggregated, on="week_ending", how="left")
 
-        # 6. Flag Market Shocks (> 2 sigma moves)
+        # 6. Flag Market Shocks (> 2 sigma moves) - Strictly Point-in-Time Expanding
         for asset, col in [
             ("gold", "weekly_return"),
             ("dxy", "dxy_weekly_return"),
@@ -122,13 +122,13 @@ class WeeklyDatasetBuilder:
             ("wti", "wti_weekly_return"),
         ]:
             if col in master.columns:
-                series = master[col].dropna()
-                mean = series.mean()
-                std = series.std()
-                if std > 0:
-                    z = (master[col] - mean) / std
-                    master[f"shock_2sigma_{asset}"] = (z.abs() >= 2.0).astype(int)
-                    master[f"shock_3sigma_{asset}"] = (z.abs() >= 3.0).astype(int)
+                series = master[col]
+                # Shift 1 ensures week t is not in its own mean and variance calculation
+                exp_mean = series.shift(1).expanding(min_periods=15).mean()
+                exp_std = series.shift(1).expanding(min_periods=15).std().replace(0, np.nan)
+                z = (series - exp_mean) / exp_std
+                master[f"shock_2sigma_{asset}"] = ((z.abs() >= 2.0) & z.notna()).astype(int)
+                master[f"shock_3sigma_{asset}"] = ((z.abs() >= 3.0) & z.notna()).astype(int)
 
         # Composite shock flag
         shock_cols = [c for c in master.columns if c.startswith("shock_2sigma_")]
@@ -137,7 +137,24 @@ class WeeklyDatasetBuilder:
         else:
             master["major_market_shock"] = 0
 
-        # Forward 1-week gold return for research studies
-        master["fwd_weekly_gold_return"] = master["weekly_return"].shift(-1)
+        # 7. Comprehensive Prediction Targets (Week t+1)
+        close = master["close"].astype(float)
+        fwd_return = (close.shift(-1) / close) - 1.0
+        master["fwd_weekly_gold_return"] = fwd_return
+        master["next_week_gold_return"] = fwd_return
+        master["next_week_direction"] = np.where(fwd_return > 0.0, 1, np.where(fwd_return < 0.0, -1, 0))
+        master["target_p_up"] = (fwd_return > 0.0).astype(int)
+        master["target_p_plus_1pct"] = (fwd_return > 0.01).astype(int)
+        master["target_p_minus_1pct"] = (fwd_return < -0.01).astype(int)
+
+        if "weekly_volatility" in master.columns:
+            master["next_week_gold_volatility"] = master["weekly_volatility"].shift(-1)
+        else:
+            master["next_week_gold_volatility"] = ((master["high"] - master["low"]) / close).shift(-1)
+
+        if "high" in master.columns and "low" in master.columns:
+            master["next_week_max_favorable_excursion"] = ((master["high"].shift(-1) - close) / close).clip(lower=0.0)
+            master["next_week_max_adverse_excursion"] = ((master["low"].shift(-1) - close) / close).clip(upper=0.0)
 
         return master
+

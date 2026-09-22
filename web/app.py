@@ -1,12 +1,11 @@
 """
-Private read-only Gold Weekly dashboard (VPS-friendly).
+Private minimal Gold Weekly bias & rationale dashboard.
 
-Auth: single shared password from DASHBOARD_PASSWORD.
-No trading / order buttons -- browse brief, news, run status only.
+Auth: single shared password from DASHBOARD_PASSWORD (bypassed on localhost for convenient single-user local use).
+Shows predictions of weekly bias and plain-English reasons for that bias.
 
 Usage:
     python -m web.app
-    # or:  uvicorn/gunicorn via deploy scripts
 """
 
 from __future__ import annotations
@@ -22,12 +21,15 @@ from dotenv import load_dotenv
 from flask import (
     Flask,
     abort,
+    jsonify,
     redirect,
     render_template,
     request,
     session,
     url_for,
 )
+
+from web.prediction_helper import get_latest_prediction_summary, refresh_prediction
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
@@ -48,8 +50,13 @@ def create_app() -> Flask:
     def login_required(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
+            # Frictionless access for single-user local usage
+            is_local = request.remote_addr in ("127.0.0.1", "localhost", "::1")
+            force_auth = os.getenv("DASHBOARD_FORCE_AUTH", "0") == "1"
+            if is_local and not force_auth:
+                return view(*args, **kwargs)
+
             if not password:
-                # Fail closed if no password configured on a public host
                 return render_template(
                     "setup.html",
                     message="Set DASHBOARD_PASSWORD in .env before exposing this dashboard.",
@@ -77,6 +84,27 @@ def create_app() -> Flask:
     @app.route("/")
     @login_required
     def home():
+        """Minimal single-page bias & reason interface."""
+        view = get_latest_prediction_summary()
+        return render_template("minimal.html", view=view)
+
+    @app.route("/api/prediction")
+    @login_required
+    def api_prediction():
+        """Returns the minimal prediction and reason JSON."""
+        return jsonify(get_latest_prediction_summary())
+
+    @app.route("/api/refresh", methods=["GET", "POST"])
+    @login_required
+    def api_refresh():
+        """Triggers a re-evaluation / refresh of the weekly prediction."""
+        refreshed = refresh_prediction()
+        return jsonify(refreshed)
+
+    @app.route("/full")
+    @login_required
+    def full_dashboard():
+        """Extended technical view (raw brief, corridor, and risk logs)."""
         brief = _load_json(BRIEF_JSON)
         run = _load_json(RUN_LOG)
         if not brief:
@@ -169,5 +197,5 @@ if __name__ == "__main__":
     host = os.getenv("DASHBOARD_HOST", "0.0.0.0")
     port = int(os.getenv("DASHBOARD_PORT", "8787"))
     debug = os.getenv("DASHBOARD_DEBUG", "0") == "1"
-    print(f"Gold dashboard on http://{host}:{port}")
+    print(f"Gold minimal bias interface on http://localhost:{port}")
     app.run(host=host, port=port, debug=debug)

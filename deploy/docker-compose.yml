@@ -1,0 +1,135 @@
+version: "3.9"
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PostgreSQL 16 Relational Engine (Metadata, Vintages, Models, Backtests)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: gold-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gold_research
+      POSTGRES_USER: gold_quant
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gold_quant_secure_2026}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - gold-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gold_quant -d gold_research"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ----------------------------------------------------------------------------
+  # 2. FastAPI Quantitative Backend & Headless Analytics
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: gold-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://gold_quant:${DB_PASSWORD:-gold_quant_secure_2026}@postgres:5432/gold_research
+      APP_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gold-internal
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # ----------------------------------------------------------------------------
+  # 3. Autonomous Ingestion & Scheduled Research Worker
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: gold-worker
+    restart: unless-stopped
+    command: ["python", "src/ingestion/scheduler.py"]
+    environment:
+      DATABASE_URL: postgresql://gold_quant:${DB_PASSWORD:-gold_quant_secure_2026}@postgres:5432/gold_research
+      APP_ENV: production
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - gold-internal
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ----------------------------------------------------------------------------
+  # 4. Next.js 14 Institutional Quant Research Terminal UI
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    container_name: gold-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      BACKEND_INTERNAL_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: /api/backend
+    depends_on:
+      - backend
+    networks:
+      - gold-internal
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ----------------------------------------------------------------------------
+  # 5. Caddy 2 Reverse Proxy & Automatic TLS / Tailscale routing
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: gold-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "3000:3000"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - gold-internal
+
+networks:
+  gold-internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

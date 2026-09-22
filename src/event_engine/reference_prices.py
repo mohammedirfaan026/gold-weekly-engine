@@ -65,29 +65,35 @@ class ReferencePriceCalculator:
 
         # Reference A: Closest price immediately before event
         ref_a = float(prior_bars[price_col].iloc[-1])
+        ts_ref_a = prior_bars[time_col].iloc[-1]
 
         # Reference B: 5 minutes prior
         t_5m = t - pd.Timedelta(minutes=5)
         bars_5m = df[times <= t_5m]
         ref_b = float(bars_5m[price_col].iloc[-1]) if not bars_5m.empty else ref_a
+        ts_ref_b = bars_5m[time_col].iloc[-1] if not bars_5m.empty else ts_ref_a
 
         # Reference C: 1 hour prior
         t_1h = t - pd.Timedelta(hours=1)
         bars_1h = df[times <= t_1h]
         ref_c = float(bars_1h[price_col].iloc[-1]) if not bars_1h.empty else ref_a
+        ts_ref_c = bars_1h[time_col].iloc[-1] if not bars_1h.empty else ts_ref_a
 
         # Reference D: Same day close (or latest bar of the event day)
         same_day_end = t.replace(hour=23, minute=59, second=59)
         bars_same_day = df[times <= same_day_end]
         ref_d = float(bars_same_day[price_col].iloc[-1]) if not bars_same_day.empty else ref_a
+        ts_ref_d = bars_same_day[time_col].iloc[-1] if not bars_same_day.empty else ts_ref_a
 
         # Reference E: Previous Friday close
         bars_prev_fri = df[times <= prev_fri]
         ref_e = float(bars_prev_fri[price_col].iloc[-1]) if not bars_prev_fri.empty else ref_a
+        ts_ref_e = bars_prev_fri[time_col].iloc[-1] if not bars_prev_fri.empty else ts_ref_a
 
         # Target Next Friday Close
         bars_next_fri = df[times <= next_fri]
         target_next_friday = float(bars_next_fri[price_col].iloc[-1]) if not bars_next_fri.empty else ref_a
+        ts_next_fri = bars_next_fri[time_col].iloc[-1] if not bars_next_fri.empty else ts_ref_a
 
         # Calculate primary returns
         post_event_return = (target_next_friday / ref_a) - 1.0 if ref_a else None
@@ -101,6 +107,12 @@ class ReferencePriceCalculator:
             "ref_d": ref_d,
             "ref_e": ref_e,
             "target_next_friday": target_next_friday,
+            "timestamp_ref_a": ts_ref_a,
+            "timestamp_ref_b": ts_ref_b,
+            "timestamp_ref_c": ts_ref_c,
+            "timestamp_ref_d": ts_ref_d,
+            "timestamp_ref_e": ts_ref_e,
+            "timestamp_next_friday": ts_next_fri,
             "event_to_next_fri_return": post_event_return,
             "prev_fri_to_event_return": pre_event_return,
             "prev_fri_to_next_fri_return": total_week_return,
@@ -108,3 +120,4 @@ class ReferencePriceCalculator:
             "weekly_response_ref_c": (target_next_friday / ref_c) - 1.0 if ref_c else None,
             "weekly_response_ref_d": (target_next_friday / ref_d) - 1.0 if ref_d else None,
         }
+

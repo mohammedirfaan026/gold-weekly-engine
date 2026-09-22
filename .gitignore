@@ -50,3 +50,7 @@ Thumbs.db
 logs/
 data/live/
 data/news/
+*.db
+node_modules/
+.next/
+.system_generated/

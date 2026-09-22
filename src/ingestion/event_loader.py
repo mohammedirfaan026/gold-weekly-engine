@@ -58,23 +58,46 @@ class EventLoader:
         start_year: int = 2010,
         custom_csv_path: Optional[str] = None,
         force_refresh: bool = False,
+        vintage_mode: str = "REAL_TIME_VINTAGE",
     ) -> pd.DataFrame:
         """
-        Loads event dataset from custom CSV, cache, or generates a comprehensive curated history.
+        Loads event dataset from custom CSV, cache, or curated history.
+        Supports explicit vintage modes: REAL_TIME_VINTAGE and CURRENT_REVISED_DATA.
         """
         cache_file = os.path.join(self.data_dir, "macro_events.parquet")
         if os.path.exists(cache_file) and not force_refresh and custom_csv_path is None:
             try:
                 df = pd.read_parquet(cache_file)
                 if not df.empty:
+                    if "vintage_mode" not in df.columns:
+                        df["vintage_mode"] = vintage_mode
+                    if "is_synthetic" not in df.columns:
+                        df["is_synthetic"] = False
                     return df
             except Exception:
                 pass
 
         if custom_csv_path and os.path.exists(custom_csv_path):
             df = pd.read_csv(custom_csv_path)
+            df["is_synthetic"] = False
         else:
+            import warnings
+            warnings.warn(
+                "Loading curated macroeconomic calendar. Ensure official economic calendar CSV "
+                "is provided for production research without synthetic fallbacks.",
+                UserWarning,
+            )
             df = self._generate_curated_calendar(start_year=start_year)
+
+        df["vintage_mode"] = vintage_mode
+        df["retrieved_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        df["dataset_version"] = "events_v1.0"
+        if "initial_release" not in df.columns:
+            df["initial_release"] = df["actual_value"]
+        if "revision" not in df.columns:
+            df["revision"] = 0.0
+        if "revision_time" not in df.columns:
+            df["revision_time"] = None
 
         # Standardize and calculate surprises
         df = SurpriseCalculator.calculate_surprises(

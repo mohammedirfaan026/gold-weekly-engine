@@ -52,63 +52,68 @@ class WindowAnalyzer:
         results = dict(ref_dict)
         next_fri_ts = get_next_friday_close(t)
 
-        # 2. Window Responses
-        # Define window offsets
-        window_targets = {
-            "1m": t + pd.Timedelta(minutes=1),
-            "5m": t + pd.Timedelta(minutes=5),
-            "15m": t + pd.Timedelta(minutes=15),
-            "30m": t + pd.Timedelta(minutes=30),
-            "1h": t + pd.Timedelta(hours=1),
-            "2h": t + pd.Timedelta(hours=2),
-            "4h": t + pd.Timedelta(hours=4),
-            "1d": t + pd.Timedelta(days=1),
-            "3d": t + pd.Timedelta(days=3),
-            "5d": t + pd.Timedelta(days=5),
-            "next_friday": next_fri_ts,
+        # 2. Window Responses - Strictly Independent Horizon Timestamp Resolution
+        window_specs = {
+            "1m": (t + pd.Timedelta(minutes=1), t, t + pd.Timedelta(minutes=3)),
+            "5m": (t + pd.Timedelta(minutes=5), t + pd.Timedelta(minutes=2), t + pd.Timedelta(minutes=10)),
+            "15m": (t + pd.Timedelta(minutes=15), t + pd.Timedelta(minutes=10), t + pd.Timedelta(minutes=25)),
+            "30m": (t + pd.Timedelta(minutes=30), t + pd.Timedelta(minutes=20), t + pd.Timedelta(minutes=45)),
+            "1h": (t + pd.Timedelta(hours=1), t + pd.Timedelta(minutes=45), t + pd.Timedelta(minutes=90)),
+            "2h": (t + pd.Timedelta(hours=2), t + pd.Timedelta(minutes=90), t + pd.Timedelta(minutes=160)),
+            "4h": (t + pd.Timedelta(hours=4), t + pd.Timedelta(minutes=180), t + pd.Timedelta(minutes=300)),
+            "1d": (t + pd.Timedelta(days=1), t + pd.Timedelta(hours=16), t + pd.Timedelta(hours=36)),
+            "3d": (t + pd.Timedelta(days=3), t + pd.Timedelta(hours=60), t + pd.Timedelta(hours=84)),
+            "5d": (t + pd.Timedelta(days=5), t + pd.Timedelta(hours=108), t + pd.Timedelta(hours=132)),
+            "next_friday": (next_fri_ts, t + pd.Timedelta(hours=1), next_fri_ts + pd.Timedelta(hours=12)),
         }
 
-        # Track returns at key checkpoints for speed calculation
         checkpoints: Dict[str, float] = {}
 
-        for win_name, target_ts in window_targets.items():
-            # Window slice from T to target_ts
-            mask_window = (times >= t) & (times <= target_ts)
+        for win_name, (target_ts, w_start, w_end) in window_specs.items():
+            mask_window = (times >= w_start) & (times <= w_end)
             win_slice = df[mask_window]
 
             if win_slice.empty:
-                # Find the closest subsequent price
-                subsequent = df[times >= t]
-                if not subsequent.empty:
-                    p_win = float(subsequent[price_col].iloc[0])
-                    high_win = float(subsequent[high_col].iloc[0]) if high_col in df.columns else p_win
-                    low_win = float(subsequent[low_col].iloc[0]) if low_col in df.columns else p_win
-                else:
-                    p_win = p0
-                    high_win = p0
-                    low_win = p0
+                # If no bar exists inside the strict horizon window, record MISSING
+                # Never silently substitute an unrelated observation or reuse the same price
+                results[f"timestamp_{win_name}"] = None
+                results[f"return_{win_name}"] = np.nan
+                results[f"abs_return_{win_name}"] = np.nan
+                results[f"mfe_{win_name}"] = np.nan
+                results[f"mae_{win_name}"] = np.nan
+                results[f"max_dd_{win_name}"] = np.nan
+                results[f"max_runup_{win_name}"] = np.nan
             else:
-                p_win = float(win_slice[price_col].iloc[-1])
-                high_win = float(win_slice[high_col].max()) if high_col in df.columns else win_slice[price_col].max()
-                low_win = float(win_slice[low_col].min()) if low_col in df.columns else win_slice[price_col].min()
+                # Select the bar closest to target_ts within the valid window
+                time_diffs = (times[mask_window] - target_ts).abs()
+                best_idx = time_diffs.idxmin()
+                best_row = df.loc[best_idx]
+                ts_win = best_row[time_col]
+                p_win = float(best_row[price_col])
 
-            ret = (p_win / p0) - 1.0
-            abs_ret = abs(ret)
-            mfe = (high_win / p0) - 1.0
-            mae = (low_win / p0) - 1.0
-            max_drawdown = min(0.0, mae)
-            max_runup = max(0.0, mfe)
+                # MFE / MAE computed from event time t to the resolved horizon bar
+                sub_slice = df[(times >= t) & (times <= ts_win)]
+                if not sub_slice.empty:
+                    high_win = float(sub_slice[high_col].max()) if high_col in df.columns else p_win
+                    low_win = float(sub_slice[low_col].min()) if low_col in df.columns else p_win
+                else:
+                    high_win = p_win
+                    low_win = p_win
 
-            results[f"return_{win_name}"] = ret
-            results[f"abs_return_{win_name}"] = abs_ret
-            results[f"mfe_{win_name}"] = mfe
-            results[f"mae_{win_name}"] = mae
-            results[f"max_dd_{win_name}"] = max_drawdown
-            results[f"max_runup_{win_name}"] = max_runup
+                ret = (p_win / p0) - 1.0
+                mfe = (high_win / p0) - 1.0
+                mae = (low_win / p0) - 1.0
 
-            checkpoints[win_name] = ret
+                results[f"timestamp_{win_name}"] = ts_win
+                results[f"return_{win_name}"] = ret
+                results[f"abs_return_{win_name}"] = abs(ret)
+                results[f"mfe_{win_name}"] = mfe
+                results[f"mae_{win_name}"] = mae
+                results[f"max_dd_{win_name}"] = min(0.0, mae)
+                results[f"max_runup_{win_name}"] = max(0.0, mfe)
+                checkpoints[win_name] = ret
 
-        # 3. Pre-event vs Post-event Volatility (annualized realized vol over 5 days prior vs 5 days post)
+        # 3. Pre-event vs Post-event Volatility
         t_pre = t - pd.Timedelta(days=5)
         t_post = t + pd.Timedelta(days=5)
         pre_slice = df[(times >= t_pre) & (times <= t)]
@@ -128,14 +133,14 @@ class WindowAnalyzer:
         results["volatility_post_event"] = post_vol
         results["volatility_ratio"] = (post_vol / pre_vol) if (pd.notna(pre_vol) and pre_vol > 0) else np.nan
 
-        # 4. Response Speed Analysis (% of weekly response realized over time)
-        r_week = results.get("event_to_next_fri_return", checkpoints.get("next_friday", 0.0))
-        if r_week and abs(r_week) > 0.0005:
-            results["speed_pct_5m"] = (checkpoints.get("5m", 0.0) / r_week) * 100.0
-            results["speed_pct_1h"] = (checkpoints.get("1h", 0.0) / r_week) * 100.0
-            results["speed_pct_4h"] = (checkpoints.get("4h", 0.0) / r_week) * 100.0
-            results["speed_pct_1d"] = (checkpoints.get("1d", 0.0) / r_week) * 100.0
-            results["speed_pct_remaining"] = 100.0 - results["speed_pct_1d"]
+        # 4. Response Speed Analysis
+        r_week = results.get("event_to_next_fri_return") or checkpoints.get("next_friday")
+        if r_week is not None and pd.notna(r_week) and abs(r_week) > 0.0005:
+            results["speed_pct_5m"] = (checkpoints["5m"] / r_week * 100.0) if "5m" in checkpoints else np.nan
+            results["speed_pct_1h"] = (checkpoints["1h"] / r_week * 100.0) if "1h" in checkpoints else np.nan
+            results["speed_pct_4h"] = (checkpoints["4h"] / r_week * 100.0) if "4h" in checkpoints else np.nan
+            results["speed_pct_1d"] = (checkpoints["1d"] / r_week * 100.0) if "1d" in checkpoints else np.nan
+            results["speed_pct_remaining"] = (100.0 - results["speed_pct_1d"]) if pd.notna(results.get("speed_pct_1d")) else np.nan
         else:
             results["speed_pct_5m"] = np.nan
             results["speed_pct_1h"] = np.nan
@@ -144,9 +149,10 @@ class WindowAnalyzer:
             results["speed_pct_remaining"] = np.nan
 
         # 5. Reversal Classification
-        # Compare initial 1h reaction to final weekly reaction
-        r_init = checkpoints.get("1h", 0.0)
-        if abs(r_init) < 0.001:
+        r_init = checkpoints.get("1h")
+        if r_init is None or pd.isna(r_init) or r_week is None or pd.isna(r_week):
+            reversal_type = "unresolved"
+        elif abs(r_init) < 0.001:
             reversal_type = "muted_initial"
         elif np.sign(r_init) == np.sign(r_week):
             if abs(r_week) >= abs(r_init):
@@ -157,10 +163,26 @@ class WindowAnalyzer:
             reversal_type = "full_reversal"
 
         results["reversal_classification"] = reversal_type
-        results["initial_reaction_1h"] = r_init
-        results["weekly_final_reaction"] = r_week
+        results["initial_reaction_1h"] = r_init if r_init is not None else np.nan
+        results["weekly_final_reaction"] = r_week if r_week is not None else np.nan
 
         return results
+
+    @classmethod
+    def validate_horizon_ordering(cls, metrics: Dict[str, Any]) -> bool:
+        """
+        Validates that resolved horizons satisfy strict monotonicity:
+        timestamp_5m < timestamp_1h < timestamp_4h < timestamp_1d < timestamp_next_friday
+        """
+        keys = ["timestamp_5m", "timestamp_1h", "timestamp_4h", "timestamp_1d", "timestamp_next_friday"]
+        valid_ts = [metrics[k] for k in keys if metrics.get(k) is not None]
+        if len(valid_ts) < 2:
+            return True
+        for i in range(1, len(valid_ts)):
+            if valid_ts[i] <= valid_ts[i - 1]:
+                return False
+        return True
+
 
     @classmethod
     def process_all_events(

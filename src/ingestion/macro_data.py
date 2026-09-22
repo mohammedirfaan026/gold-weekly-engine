@@ -91,11 +91,21 @@ class MacroDataIngestor:
 
         raw_df = self.fetch_fred_series(fred_id)
         if raw_df is None or raw_df.empty:
-            raw_df = self._generate_fallback_macro(series_name, start_year)
+            # If network/FRED is unavailable, verify if cache exists; otherwise raise clear error
+            if os.path.exists(cache_file):
+                return pd.read_parquet(cache_file)
+            raise RuntimeError(
+                f"FRED macro series '{series_name}' (ID: {fred_id}) could not be retrieved and no cache exists. "
+                "Silent synthetic data generation is strictly disabled for research integrity."
+            )
 
         # Build point-in-time observation and publication timestamps
         raw_df["observation_time"] = pd.to_datetime(raw_df["date"]).dt.tz_localize("UTC")
         raw_df["publication_time"] = raw_df["observation_time"] + pd.Timedelta(days=lag_days, hours=13)  # ~08:30-09:00 ET
+        raw_df["source"] = "FRED"
+        raw_df["source_series_id"] = fred_id
+        raw_df["is_imputed"] = False
+        raw_df["retrieved_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
 
         # Filter by start_year
         start_ts = pd.Timestamp(f"{start_year}-01-01", tz="UTC")
@@ -105,36 +115,3 @@ class MacroDataIngestor:
         result_df.to_parquet(cache_file, index=False)
         return result_df
 
-    def _generate_fallback_macro(self, series_name: str, start_year: int) -> pd.DataFrame:
-        """
-        Generates historically calibrated fallback macro values if FRED connection is unavailable.
-        """
-        start_date = pd.Timestamp(f"{start_year}-01-01")
-        end_date = pd.Timestamp.now()
-        dates = pd.date_range(start_date, end_date, freq="B")
-        n = len(dates)
-        np.random.seed(100 + abs(hash(series_name)) % 500)
-
-        if "real_yield" in series_name:
-            # Historical 10Y TIPS oscillated between -1.0% (2020-2021) and +2.5% (2023-2024)
-            val = np.zeros(n)
-            val[0] = 1.10
-            for i in range(1, n):
-                val[i] = val[i-1] + np.random.normal(0, 0.03)
-                # Keep within historical bounds
-                val[i] = np.clip(val[i], -1.2, 2.6)
-        elif "hy_oas" in series_name:
-            # HY OAS spread in bps / percentage (typically 3.0% to 10.0%)
-            val = np.zeros(n)
-            val[0] = 5.2
-            for i in range(1, n):
-                val[i] = max(2.8, val[i-1] + 0.05 * (4.5 - val[i-1]) + np.random.normal(0, 0.12))
-        elif "treasury" in series_name:
-            val = np.zeros(n)
-            val[0] = 3.2
-            for i in range(1, n):
-                val[i] = max(0.4, val[i-1] + np.random.normal(0, 0.04))
-        else:
-            val = np.random.normal(100.0, 5.0, n)
-
-        return pd.DataFrame({"date": dates, "value": val})

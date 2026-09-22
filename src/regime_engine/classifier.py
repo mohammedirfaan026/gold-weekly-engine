@@ -28,30 +28,32 @@ class RegimeClassifier:
         labels: tuple[str, str, str] = ("low", "neutral", "high"),
         window: int = 750,  # ~3 years of business days
         min_periods: int = 60,
+        pit_strict: bool = False,
     ) -> pd.Series:
         """
         Calculates rolling percentile thresholds to prevent look-ahead bias,
         categorizing values into three discrete regimes.
+        When pit_strict=True, strictly prevents future quantile look-ahead.
         """
-        # Calculate rolling quantiles
-        q_low = series.rolling(window=window, min_periods=min_periods).quantile(lower_pct / 100.0)
-        q_high = series.rolling(window=window, min_periods=min_periods).quantile(upper_pct / 100.0)
+        prior_series = series.shift(1)
+        q_low = prior_series.rolling(window=window, min_periods=min_periods).quantile(lower_pct / 100.0)
+        q_high = prior_series.rolling(window=window, min_periods=min_periods).quantile(upper_pct / 100.0)
 
-        # Fallback to full-history static quantiles if rolling is still warming up
-        overall_low = series.quantile(lower_pct / 100.0)
-        overall_high = series.quantile(upper_pct / 100.0)
-        q_low = q_low.fillna(overall_low)
-        q_high = q_high.fillna(overall_high)
+        if not pit_strict:
+            overall_low = series.quantile(lower_pct / 100.0)
+            overall_high = series.quantile(upper_pct / 100.0)
+            q_low = q_low.fillna(overall_low)
+            q_high = q_high.fillna(overall_high)
 
         conditions = [
-            series <= q_low,
-            (series > q_low) & (series < q_high),
-            series >= q_high,
+            q_low.notna() & (series <= q_low),
+            q_low.notna() & q_high.notna() & (series > q_low) & (series < q_high),
+            q_high.notna() & (series >= q_high),
         ]
-        return pd.Series(np.select(conditions, labels, default="neutral"), index=series.index)
+        return pd.Series(np.select(conditions, labels, default=labels[1]), index=series.index)
 
     @classmethod
-    def classify_dataset_regimes(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def classify_dataset_regimes(cls, df: pd.DataFrame, pit_strict: bool = True) -> pd.DataFrame:
         """
         Applies documented regime definitions to the reconstructed market state dataframe.
         """
@@ -64,6 +66,7 @@ class RegimeClassifier:
                 lower_pct=33.33,
                 upper_pct=66.67,
                 labels=("falling", "neutral", "rising"),
+                pit_strict=pit_strict,
             )
         else:
             res["regime_real_yield"] = "neutral"
@@ -75,6 +78,7 @@ class RegimeClassifier:
                 lower_pct=33.33,
                 upper_pct=66.67,
                 labels=("weakening", "neutral", "strengthening"),
+                pit_strict=pit_strict,
             )
         else:
             res["regime_dxy"] = "neutral"
@@ -86,6 +90,7 @@ class RegimeClassifier:
                 lower_pct=25.0,
                 upper_pct=75.0,
                 labels=("low", "normal", "high"),
+                pit_strict=pit_strict,
             )
         else:
             res["regime_vix"] = "normal"
@@ -97,9 +102,11 @@ class RegimeClassifier:
                 lower_pct=25.0,
                 upper_pct=75.0,
                 labels=("low", "normal", "high"),
+                pit_strict=pit_strict,
             )
         else:
             res["regime_gold_vol"] = "normal"
+
 
         # 5. Gold Trend Regime
         if "gold_trend" in res.columns:

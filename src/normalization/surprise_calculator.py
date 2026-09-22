@@ -61,26 +61,19 @@ class SurpriseCalculator:
             group = df.loc[group_indices].sort_values(by=timestamp_col)
             surprises = group["surprise_absolute"]
             
-            # Point-in-time expanding std: computed using only prior observations
+            # Point-in-time expanding std: computed using only strictly prior observations
             # shift(1) ensures the current observation's surprise is NOT included in its own historical std dev
             expanding_std = surprises.shift(1).expanding(min_periods=min_history_for_zscore).std(ddof=1)
             
-            # Fallback for initial releases: use the first available robust std or current group std if expanding is NaN
-            overall_std = surprises.std(ddof=1)
-            if pd.isna(overall_std) or overall_std == 0:
-                overall_std = 1.0
-
-            # If expanding_std is NaN (early in history), fall back safely to overall or minimum std
-            effective_std = expanding_std.fillna(overall_std)
-            # Avoid division by zero
-            effective_std = effective_std.replace(0, overall_std if overall_std > 0 else 1.0)
-            
+            # Avoid division by zero or negative std
+            effective_std = expanding_std.replace(0, np.nan)
             z_scores = surprises / effective_std
             
             df.loc[group.index, "surprise_hist_std"] = effective_std
             df.loc[group.index, "surprise_zscore"] = z_scores
 
         return df
+
 
     @staticmethod
     def bucket_surprise(

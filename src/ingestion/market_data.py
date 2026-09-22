@@ -142,81 +142,22 @@ class MarketDataIngestor:
         )
 
         if df is None or df.empty:
-            # If rate limited or ticker unavailable, generate synthetic benchmark series for testing
-            df = self._generate_fallback_series(symbol_key, start_year, interval)
+            if os.path.exists(cache_file):
+                return pd.read_parquet(cache_file)
+            raise RuntimeError(
+                f"Market series '{symbol_key}' (ticker: {ticker}) could not be fetched from Yahoo Finance and no cache exists. "
+                "Silent synthetic data generation is strictly disabled for research integrity."
+            )
+
+        df["source"] = "YahooFinance"
+        df["symbol_key"] = symbol_key
+        df["ticker"] = ticker
+        df["is_imputed"] = False
+        df["retrieved_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
 
         df.to_parquet(cache_file, index=False)
         return df
 
-    def _generate_fallback_series(self, symbol_key: str, start_year: int, interval: str) -> pd.DataFrame:
-        """
-        Generates realistic statistical price series based on historical macro distributions (2010-present)
-        if offline or upstream API fails.
-        """
-        start_date = pd.Timestamp(f"{start_year}-01-01", tz="UTC")
-        end_date = pd.Timestamp.now(tz="UTC")
-        
-        if interval == "1d":
-            dates = pd.date_range(start_date, end_date, freq="B")
-        elif interval == "1h":
-            dates = pd.date_range(end_date - pd.Timedelta(days=700), end_date, freq="1h")
-        elif interval == "5m":
-            dates = pd.date_range(end_date - pd.Timedelta(days=60), end_date, freq="5min")
-        else:
-            dates = pd.date_range(start_date, end_date, freq="B")
-
-        n = len(dates)
-        np.random.seed(42 + abs(hash(symbol_key)) % 1000)
-
-        # Baseline parameters by asset
-        params = {
-            "gold_spot": (1200.0, 0.0003, 0.010),
-            "gold_futures": (1205.0, 0.0003, 0.010),
-            "silver": (18.0, 0.0002, 0.018),
-            "copper": (3.2, 0.0001, 0.014),
-            "wti": (75.0, 0.0001, 0.022),
-            "brent": (80.0, 0.0001, 0.021),
-            "dxy": (80.0, 0.0001, 0.005),
-            "dxy_proxy": (22.0, 0.0001, 0.005),
-            "eurusd": (1.35, -0.00005, 0.005),
-            "usdjpy": (90.0, 0.0002, 0.006),
-            "spx": (1100.0, 0.0004, 0.011),
-            "ndx": (1800.0, 0.0006, 0.014),
-            "rut": (600.0, 0.0003, 0.013),
-            "vix": (20.0, 0.0, 0.05),
-            "treasury_10y": (3.5, 0.0, 0.02),
-            "gld": (115.0, 0.0003, 0.010),
-            "iau": (12.0, 0.0003, 0.010),
-            "hyg": (85.0, 0.00005, 0.006),
-            "lqd": (105.0, 0.00002, 0.005),
-        }
-        base_p, drift, vol = params.get(symbol_key, (100.0, 0.0002, 0.01))
-
-        if symbol_key == "vix":
-            # Mean-reverting Ornstein-Uhlenbeck process for VIX
-            vix = np.zeros(n)
-            vix[0] = 18.0
-            for i in range(1, n):
-                vix[i] = max(9.0, vix[i-1] + 0.08 * (17.5 - vix[i-1]) + np.random.normal(0, 1.8))
-            close = vix
-        else:
-            returns = np.random.normal(drift, vol, n)
-            close = base_p * np.exp(np.cumsum(returns))
-
-        open_p = close * (1.0 + np.random.normal(0, vol * 0.2, n))
-        high_p = np.maximum(open_p, close) * (1.0 + np.abs(np.random.normal(0, vol * 0.5, n)))
-        low_p = np.minimum(open_p, close) * (1.0 - np.abs(np.random.normal(0, vol * 0.5, n)))
-        volume = np.random.lognormal(14.0, 0.6, n)
-
-        df = pd.DataFrame({
-            "timestamp": dates,
-            "open": open_p,
-            "high": high_p,
-            "low": low_p,
-            "close": close,
-            "volume": volume,
-        })
-        return DataCleaner.validate_ohlc(df)
 
     def resample_bars(self, df: pd.DataFrame, target_freq: str) -> pd.DataFrame:
         """

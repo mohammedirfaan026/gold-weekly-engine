@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gold Weekly · Bias & Rationale</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='minimal.css') }}" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        GOLD <span>WEEKLY</span>
+      </div>
+      <div class="header-right">
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span id="liveStatusText">Live Model</span>
+        </div>
+        <button id="refreshBtn" class="btn-refresh" title="Re-evaluate prediction">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- Prediction Hero Card -->
+    <section class="card">
+      <div class="card-top">
+        <span id="weekLabel">Week Ending: {{ view.week }}</span>
+        <span class="price-tag" id="priceLabel">Spot: ${{ '%.2f'|format(view.price) }}</span>
+      </div>
+
+      <div class="bias-banner {{ view.badge_class }}" id="biasBanner">
+        <div class="bias-title-group">
+          <span class="bias-label">Predicted Weekly Bias</span>
+          <span class="bias-val" id="directionLabel">{{ view.direction }}</span>
+        </div>
+        <div class="bias-title-group" style="text-align: right;">
+          <span class="bias-label">Expected Return</span>
+          <span class="bias-val" id="expectedReturnLabel" style="font-size: 1.25rem;">{{ '%+.2f'|format(view.expected_return_pct) }}%</span>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-box">
+          <span class="metric-name">Bias Score</span>
+          <span class="metric-val" id="scoreVal">{{ '%+.3f'|format(view.bias_score) }}</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-name">Confidence</span>
+          <span class="metric-val" id="confVal">{{ view.confidence_tier }}</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-name">Range Corridor</span>
+          <span class="metric-val" id="corridorVal">${{ '%.0f'|format(view.corridor_low) }} - ${{ '%.0f'|format(view.corridor_high) }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reason & Description Card -->
+    <section class="card">
+      <div class="card-heading">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        Reason for Bias
+      </div>
+
+      <p class="narrative-text" id="reasonNarrative">
+        {{ view.reason_narrative }}
+      </p>
+
+      {% if view.caution_note %}
+      <div class="caution-box" id="cautionBox">
+        <span class="caution-icon">⚠️</span>
+        <span id="cautionText">{{ view.caution_note }}</span>
+      </div>
+      {% else %}
+      <div class="caution-box" id="cautionBox" style="display: none;">
+        <span class="caution-icon">⚠️</span>
+        <span id="cautionText"></span>
+      </div>
+      {% endif %}
+
+      <!-- Macro Driver Pills -->
+      <div class="card-heading" style="margin-top: 0.5rem;">
+        Macro Transmission Drivers
+      </div>
+      <div class="factors-grid" id="factorsGrid">
+        {% for d in view.drivers %}
+        <div class="factor-card">
+          <div class="factor-header">
+            <span class="factor-name">{{ d.name }}</span>
+            <span class="factor-badge {{ d.badge }}">{{ d.impact }}</span>
+          </div>
+          <span class="factor-val">{{ d.value }}</span>
+          <span class="factor-desc">{{ d.description }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Private Decision Interface · Auto-synced from latest inference
+    </footer>
+
+  </div>
+
+  <script>
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.classList.add('loading');
+      refreshBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/refresh', { method: 'POST' });
+        if (!res.ok) throw new Error('Network error');
+        const data = await res.json();
+        updateUI(data);
+      } catch (err) {
+        console.error('Refresh failed:', err);
+      } finally {
+        refreshBtn.classList.remove('loading');
+        refreshBtn.disabled = false;
+      }
+    });
+
+    function updateUI(d) {
+      document.getElementById('weekLabel').textContent = `Week Ending: ${d.week}`;
+      document.getElementById('priceLabel').textContent = `Spot: $${d.price.toFixed(2)}`;
+      
+      const banner = document.getElementById('biasBanner');
+      banner.className = `bias-banner ${d.badge_class}`;
+      
+      document.getElementById('directionLabel').textContent = d.direction;
+      const expSign = d.expected_return_pct >= 0 ? '+' : '';
+      document.getElementById('expectedReturnLabel').textContent = `${expSign}${d.expected_return_pct.toFixed(2)}%`;
+      
+      const scoreSign = d.bias_score >= 0 ? '+' : '';
+      document.getElementById('scoreVal').textContent = `${scoreSign}${d.bias_score.toFixed(3)}`;
+      document.getElementById('confVal').textContent = d.confidence_tier;
+      if (d.corridor_low && d.corridor_high) {
+        document.getElementById('corridorVal').textContent = `$${d.corridor_low.toFixed(0)} - $${d.corridor_high.toFixed(0)}`;
+      }
+
+      document.getElementById('reasonNarrative').textContent = d.reason_narrative;
+
+      const cautionBox = document.getElementById('cautionBox');
+      const cautionText = document.getElementById('cautionText');
+      if (d.caution_note) {
+        cautionText.textContent = d.caution_note;
+        cautionBox.style.display = 'flex';
+      } else {
+        cautionBox.style.display = 'none';
+      }
+
+      const grid = document.getElementById('factorsGrid');
+      grid.innerHTML = '';
+      (d.drivers || []).forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'factor-card';
+        card.innerHTML = `
+          <div class="factor-header">
+            <span class="factor-name">${escapeHtml(item.name)}</span>
+            <span class="factor-badge ${escapeHtml(item.badge)}">${escapeHtml(item.impact)}</span>
+          </div>
+          <span class="factor-val">${escapeHtml(item.value)}</span>
+          <span class="factor-desc">${escapeHtml(item.description)}</span>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
